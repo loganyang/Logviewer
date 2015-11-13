@@ -163,7 +163,8 @@ void UserTableModel::FilterEvent(QString EventLogs)
             }
             if(isStartProgram(ReadData))
             {
-                QString ProgramName = fields[4].section(" ",4,-9);
+                int xx = fields.indexOf("with End Time");
+                QString ProgramName = fields[4].section(" ",4,xx - 1);
                 m_navigator.push_back(QPair<QString, QStringList>(QString("%1##%2").arg(ProgramName).arg(m_items.size() - 1),
                                    QStringList()));
             }

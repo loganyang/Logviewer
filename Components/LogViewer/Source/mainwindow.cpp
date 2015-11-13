@@ -34,7 +34,7 @@ class Picker : public QwtPlotZoomer
     Picker(QWidget* widget):QwtPlotZoomer(widget)
     {
         setRubberBandPen( QColor( Qt::darkGreen ) );
-        //setRubberBand(QwtPicker::CrossRubberBand);
+      //  setRubberBand(QwtPicker::CrossRubberBand);
         setTrackerMode( QwtPlotPicker::AlwaysOn );
         setMousePattern( QwtEventPattern::MouseSelect1,
             Qt::LeftButton,Qt::ControlModifier);
@@ -137,7 +137,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->tableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     ui->tableView->setAttribute(Qt::WA_TranslucentBackground);
     ui->tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ui->tableView->setWordWrap(true);
     //ui->tableView->setPalette(QPalette(Qt::gray));
     // draw sensor data plot
     connect(ui->tableView,SIGNAL(doubleClicked(QModelIndex)),this,SLOT(DrawCurves(QModelIndex)));
@@ -264,6 +263,7 @@ void MainWindow::SetModel(QAbstractTableModel *model)
 {
     delete ui->tableView->model();
     ui->tableView->setModel(model);
+    ui->tableView->setWordWrap(true);
     AddLogLevels();
     init();
     dynamic_cast<UserTableModel*>(model)->setView(ui->tableView);
@@ -338,7 +338,7 @@ void MainWindow::DrawCurves(QModelIndex index)
     QwtPlotPanner *panner = new QwtPlotPanner( canvas );
     panner->setMouseButton( Qt::LeftButton );
     QwtPlotMagnifier* mag =  new QwtPlotMagnifier( canvas );
-    mag->setAxisEnabled(QwtPlot::yLeft,false);
+    //mag->setAxisEnabled(QwtPlot::yLeft,false);
 
 
     QwtPlotGrid *grid = new QwtPlotGrid();

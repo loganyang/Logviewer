@@ -18,7 +18,7 @@ class MainWindow;
 }
 
 class Picker;
-const QString VERSION_LOGVIEWER = " 1.0 HIM_0.022";
+const QString VERSION_LOGVIEWER = " 1.0 HIM_0.022\n1.1 integrated LPKG reader";
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
