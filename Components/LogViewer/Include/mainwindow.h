@@ -13,12 +13,13 @@
 #include "QThread"
 #include "QDir"
 #include "lpkgreader.h"
+#include "logparser.h"
 namespace Ui {
 class MainWindow;
 }
 
 class Picker;
-const QString VERSION_LOGVIEWER = " 1.0 HIM_0.022\n1.1 integrated LPKG reader";
+const QString VERSION_LOGVIEWER = "1.0 HIM_0.022\n1.1 Integrated with LPKG reader\n1.2 Added scenario filters \n1.3 Checked log errors";
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -47,7 +48,8 @@ public slots:
     void OnLegendDoubleClicked(QwtPlotItem *item, QColor color, int index);
     void OnLegendChecked(QwtPlotItem *item, bool on, int index);
     void OnZoomed(QRectF point);
-    void OnFinishAnalyzingLog(bool flag);
+    void OnFinishAnalyzingLog(PARSER_Result result);
+    void UpdateStatusbar(QModelIndex index);
 private:
     void UpdateView();
     Ui::MainWindow *ui;

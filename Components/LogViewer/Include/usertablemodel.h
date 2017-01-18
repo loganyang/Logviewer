@@ -10,6 +10,9 @@
 #include <QPair>
 #include <QDate>
 #include <QTableView>
+
+typedef QPair<QString,QStringList> step_t;
+typedef QPair<QString, QList<step_t > > program_t;
 struct Event
 {
     Event(QString t, QString i, QString ty, QString desc):time(t),id(i),type(ty),description(desc){}
@@ -36,7 +39,9 @@ public:
     void setView(QTableView* view){m_view = view;}
     bool isStartProgram(QString line);
     bool isStartStep(QString line);
-    const QList<QPair<QString,QStringList> >& GetLogNavigator() const
+    bool isStartScenario(QString line);
+    bool isUserOperation(QString line);
+    const QList<program_t > & GetLogNavigator() const
     {
         return m_navigator;
     }
@@ -52,7 +57,7 @@ private:
     void ResetLogs();
 public:
     QList<Event> m_items;
-    QList<QPair<QString,QStringList> > m_navigator;
+    QList<program_t > m_navigator;
     QDate m_Current;
     QDir m_LogDir;
     QString m_LogLevel;

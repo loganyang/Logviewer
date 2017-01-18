@@ -58,6 +58,7 @@ bool SensorDataItf::load(QDir dir, QDateTime date)
     if(log.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         bool flag = false;
+        ret = true;
         while (!log.atEnd()) {
             QString ReadData = log.readLine();
             QStringList fields = ReadData.split(" ",QString::SkipEmptyParts);

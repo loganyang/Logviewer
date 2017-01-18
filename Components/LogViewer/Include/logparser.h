@@ -6,6 +6,14 @@
 #include <QDir>
 #include <QThread>
 #include <QDateTime>
+#include <QTextStream>
+enum PARSER_Result
+{
+    PAR_CANCEL,
+    PAR_SUCCESSFULE,
+    PAR_FAIL
+};
+
 struct ControlKey
 {
     ControlKey(QString nam, QString sta, QString sto, bool fla,QStringList inter):
@@ -37,20 +45,26 @@ public:
     ~LogParser();
 
 signals:
-    void sigFinished(bool success);
+    void sigFinished(PARSER_Result result);
 
 public slots:
     void start(QString path);
     void parse();
+    bool CheckErrors();
 
 private:
     void writeCSV();
+    void Log(QString log);
 
 private:
     QDir m_LogDir;
     QString m_ResultFile;
     QList<ControlKey> m_items;
     QThread* m_thread;
+    QFile* mp_LogFile;
+    QString m_LogfileName;
+    QTextStream m_log;
 };
+
 
 #endif // LOGPARSER_H

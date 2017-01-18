@@ -3,6 +3,7 @@
 #include "QRegularExpression"
 #include "QFile"
 #include "QDebug"
+#include <QCoreApplication>
 qint64 ControlKey::average()
 {
     qint64 sum = 0;
@@ -145,21 +146,100 @@ LogParser::LogParser() : QObject(0)
     ControlKey ALLProgramEndTime("AllProgramEndTime", "User start the program","User drain the last reagent of the program",false, inter);
     ALLProgramEndTime.ignoreErrors = ignoreErrors;
     m_items.push_back(ALLProgramEndTime);
-
+    m_LogfileName = QCoreApplication::applicationDirPath() + QDir::separator() + QString("LOG_%1.csv").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd"));
+    mp_LogFile = new QFile(m_LogfileName);
 
 }
 
 LogParser::~LogParser()
 {
     delete m_thread;
+    mp_LogFile->close();
 }
 
 void LogParser::start(QString path)
 {
     m_LogDir = QDir(path);
-    //m_thread->start(QThread::NormalPriority);
-    parse();
+    //parse();
+    bool res  = mp_LogFile->open(QIODevice::Text | QIODevice::Append);
+    m_log.setDevice(mp_LogFile);
+    (void)CheckErrors();
 
+    mp_LogFile->close();
+
+}
+bool LogParser::CheckErrors()
+{
+    QString CfgErrorName = QCoreApplication::applicationDirPath() + QDir::separator() + "errors.ini";
+    QFile ErrorListFile(CfgErrorName);
+    QString regstr ="90909090909090";
+    if(ErrorListFile.exists() && ErrorListFile.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        Log("Open and Read the error list: " + CfgErrorName);
+        while (!ErrorListFile.atEnd()) {
+            QString ReadData = ErrorListFile.readLine();
+            if(!ReadData.trimmed().isEmpty())
+            {
+                regstr += ("|" + ReadData.split(",").at(0));
+            }
+        }
+        ErrorListFile.close();
+    }
+    else
+    {
+        Log("Cann't read the error list file: " + CfgErrorName);
+        emit sigFinished(PAR_FAIL);
+        return false;
+    }
+    QRegExp reg(regstr);
+    if(m_LogDir.exists())
+    {
+        bool haveLogFile = false;
+        Log("Try to check errors in " + m_LogDir.absolutePath());
+        foreach (QString logstr,m_LogDir.entryList(QStringList() <<"HISTOCOREPEARL_*_*.log"<<"HISTOCOREPRIMARIS_*_*.log"
+                                                   , QDir::NoFilter,QDir::Name))
+        {
+            QFile log(m_LogDir.absolutePath() + "/" + logstr);
+            if(log.open(QIODevice::ReadOnly | QIODevice::Text))
+            {
+                while (!log.atEnd())
+                {
+                    QString ReadData = log.readLine();
+                    if(ReadData.contains(reg))
+                    {
+                        Log("There are errors in: " +  m_LogDir.absolutePath() + "/" + logstr + ":  " + ReadData.trimmed());
+                        emit sigFinished(PAR_FAIL);
+                        return false;
+                    }
+                }
+                log.close();
+            }
+            else
+            {
+                Log("Cann't open the log file: " + logstr);
+                emit sigFinished(PAR_FAIL);
+                return false;
+            }
+            haveLogFile = true;
+        }
+        if(haveLogFile)
+        {
+            Log("There are no any errors in: " +  m_LogDir.absolutePath());
+            emit sigFinished(PAR_SUCCESSFULE);
+        }
+        else
+        {
+            Log("There are no any log files in: " +  m_LogDir.absolutePath());
+            emit sigFinished(PAR_CANCEL);
+        }
+        return true;
+    }
+    else
+    {
+        Log("The log directory is not existed: " + m_LogDir.absolutePath());
+        emit sigFinished(PAR_FAIL);
+        return false;
+    }
 }
 
 void LogParser::parse()
@@ -199,5 +279,11 @@ void LogParser::writeCSV()
         }
     }
     csv.close();
-    emit sigFinished(true);
+    emit sigFinished(PAR_SUCCESSFULE);
+}
+
+void LogParser::Log(QString log)
+{
+    m_log<<QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz,")<<log<<endl;
+    m_log.flush();
 }

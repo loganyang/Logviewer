@@ -28,14 +28,15 @@
 #include "qwt_plot_zoneitem.h"
 #include "../Include/lpkgreader.h"
 #include "qwt_plot_renderer.h"
+#include "qstatusbar.h"
 class Picker : public QwtPlotZoomer
 {
   public:
     Picker(QWidget* widget):QwtPlotZoomer(widget)
     {
-        setRubberBandPen( QColor( Qt::darkGreen ) );
-      //  setRubberBand(QwtPicker::CrossRubberBand);
+        setRubberBandPen( QColor(Qt::black) );
         setTrackerMode( QwtPlotPicker::AlwaysOn );
+        setRubberBand( QwtPicker::RectRubberBand );
         setMousePattern( QwtEventPattern::MouseSelect1,
             Qt::LeftButton,Qt::ControlModifier);
         setMousePattern( QwtEventPattern::MouseSelect2,
@@ -45,7 +46,7 @@ class Picker : public QwtPlotZoomer
     }
     virtual QwtText trackerTextF(const QPointF & point) const
     {
-        QwtText text =  QwtText(QString("%1 %2").arg(QDateTime::fromMSecsSinceEpoch(point.x()).toString("hh:mm:ss.zzz"))
+        QwtText text =  QwtText(QString("%1, %2").arg(QDateTime::fromMSecsSinceEpoch(point.x()).toString("hh:mm:ss.zzz"))
                                             .arg(point.y()));
 
         text.setColor( Qt::white );
@@ -68,10 +69,10 @@ public:
         // as we have dates from 2010 only we use
         // format strings without the year
 
-        setDateFormat( QwtDate::Millisecond, "hh:mm:ss:zzz\nyyyy-MM-dd" );
-        setDateFormat( QwtDate::Second, "hh:mm:ss\nyyyy-MM-dd" );
-        setDateFormat( QwtDate::Minute, "hh:mm\nyyyy-MM-dd" );
-        setDateFormat( QwtDate::Hour, "hh:mm\nyyyy-MM-dd" );
+        setDateFormat( QwtDate::Millisecond, "hh:mm:ss:zzz" ); //hh:mm:ss:zzz\nyyyy-MM-dd
+        setDateFormat( QwtDate::Second, "hh:mm:ss" );
+        setDateFormat( QwtDate::Minute, "hh:mm" );
+        setDateFormat( QwtDate::Hour, "hh:mm" );
         setDateFormat( QwtDate::Day, "yyyy-MM-dd" );
         //setDateFormat( QwtDate::Week, "Www" );
         setDateFormat( QwtDate::Month, "MMM" );
@@ -137,10 +138,14 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->tableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     ui->tableView->setAttribute(Qt::WA_TranslucentBackground);
     ui->tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tableView->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+//    ui->tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+//    ui->tableView->resizeColumnsToContents();
+//    ui->tableView->resizeRowsToContents();
     //ui->tableView->setPalette(QPalette(Qt::gray));
     // draw sensor data plot
     connect(ui->tableView,SIGNAL(doubleClicked(QModelIndex)),this,SLOT(DrawCurves(QModelIndex)));
-
+    connect(ui->tableView,SIGNAL(clicked(QModelIndex)),this,SLOT(UpdateStatusbar(QModelIndex)));
 
 
     //init plot
@@ -170,10 +175,10 @@ MainWindow::MainWindow(QWidget *parent) :
      QAction *ccfg = new QAction("&Open log",this);
      connect(ccfg,SIGNAL(triggered()),this,SLOT(loadLogs()));
 
-     QAction *Anls = new QAction("&Analysize log",this);
+     QAction *Anls = new QAction("&Analyse log",this);
      connect(Anls,SIGNAL(triggered()),this,SLOT(AnalysizeLog()));
 
-     QAction *lpkg = new QAction("&LPKG",this);
+     QAction *lpkg = new QAction("&Unzip LPKG",this);
      connect(lpkg,SIGNAL(triggered()),this,SLOT(OpenLPKG()));
 
      QAction *SaveCurves = new QAction("&Save Curves",this);
@@ -199,6 +204,10 @@ MainWindow::MainWindow(QWidget *parent) :
 
      m_lpkg = new LPKGReader();
      m_lpkg->setVisible(false);
+
+    statusBar()->setVisible(true);
+    statusBar()->setSizeGripEnabled(false);
+    statusBar()->showMessage("Ready");
 }
 
 MainWindow::~MainWindow()
@@ -207,8 +216,50 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::UpdateStatusbar(QModelIndex index)
+{
+    Q_UNUSED(index);
+    QItemSelectionModel *select = ui->tableView->selectionModel();
+    if(select->hasSelection())
+    {
+        QModelIndexList gaps = select->selectedRows(1);
+        const UserTableModel *model =
+            qobject_cast<UserTableModel *>( ui->tableView->model() );
+        bool ok = false;
+        quint64 sum = 0;
+        quint64 tmp = 0;
+        foreach (QModelIndex gap, gaps) {
+            tmp = 0;
+            tmp = model->data(gap, Qt::EditRole).toULongLong(&ok);
+            if(ok)
+            {
+                sum += tmp;
+            }
+        }
+        statusBar()->showMessage(QString("sum: %1h:%2m:%3s").arg(sum/3600).arg( (sum%3600)/60).arg((sum%3600)%60));
+    }
+}
+
 quint32 MainWindow::loadLogs()
 {
+    if(QFile::exists(".data"))
+    {
+        QFile tmpf(".data");
+        if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
+        {
+            while (!tmpf.atEnd())
+            {
+                QString ReadData = tmpf.readLine();
+                if(ReadData.startsWith("LOG_PATH##"))
+                {
+                    m_LogDir = QFileInfo(ReadData.section("##",1)).absoluteDir();
+                    break;
+                }
+            }
+            tmpf.close();
+        }
+
+    }
     QString file = QFileDialog::getOpenFileName(this,"select file",m_LogDir.absolutePath(),"log(HISTOCORE*_*_*.log)");
     if(file.isEmpty())
     {
@@ -218,20 +269,73 @@ quint32 MainWindow::loadLogs()
 
     m_LogDir = QFileInfo(file).absoluteDir();
 
+    QFile tmpf(".data");
+    if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
+    {
+        tmpf.write(QString("LOG_PATH##%1").arg(file).toUtf8());
+        tmpf.close();
+    }
     return 0;
 }
 
 void MainWindow::AnalysizeLog()
 {
+    if(QFile::exists(".data"))
+    {
+        QFile tmpf(".data");
+        if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
+        {
+            while (!tmpf.atEnd())
+            {
+                QString ReadData = tmpf.readLine();
+                if(ReadData.startsWith("LOG_PATH##"))
+                {
+                    m_LogDir = QFileInfo(ReadData.section("##",1)).absoluteDir();
+                    break;
+                }
+            }
+            tmpf.close();
+        }
+
+    }
+
     QString dirstr = QFileDialog::getExistingDirectory(this,"select a directory",m_LogDir.absolutePath());
+    if(dirstr.isEmpty()) //user click "cancel"
+        return;
     QDir dir(dirstr);
     if(dir.exists())
     {
         m_LogDir = dir;
+        QFile tmpf(".data");
+        if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
+        {
+            tmpf.write(QString("LOG_PATH##%1").arg(dirstr).toUtf8());
+            tmpf.close();
+        }
         emit sigAnalysizeLog(dirstr);
     }
+    else
+    {
+        QMessageBox::information(ui->centralWidget,"Log Parser","The directory is not existed",QMessageBox::Ok );
+    }
 }
-
+void MainWindow::OnFinishAnalyzingLog(PARSER_Result result)
+{
+    switch(result)
+    {
+    case PAR_CANCEL:
+        QMessageBox::information(ui->centralWidget,"Log Parser","There is no any log files in your directory!!",QMessageBox::Ok );
+        break;
+    case PAR_SUCCESSFULE:
+        QMessageBox::information(ui->centralWidget,"Log Parser","Test passed.         ",QMessageBox::Ok );
+        break;
+    case PAR_FAIL:
+        QMessageBox::information(ui->centralWidget,"Log Parser","Test failed.               " ,QMessageBox::Ok );
+        break;
+    default:
+        ;
+    }
+}
 void MainWindow::OpenLPKG()
 {
     m_lpkg->show();
@@ -281,7 +385,13 @@ void MainWindow::DrawCurves(QModelIndex index)
     QAbstractItemModel *model = ui->tableView->model();
     QModelIndex xi = model->index(index.row(),0,QModelIndex());
     QDateTime Datetime = QDateTime::fromString(model->data(xi).toString(),"yyyy-MM-dd hh:mm:ss.zzz");
-    m_sditf.load(m_LogDir, Datetime);
+
+    if(!m_sditf.load(m_LogDir, Datetime))
+    {
+        m_waitingBox->hide();
+        QMessageBox::information(this,"Info", "No sensor data for this event log", QMessageBox::Ok);
+        return;
+    }
     QStringList CurveNames = m_sditf.curves();
 
     const double* time;
@@ -332,9 +442,21 @@ void MainWindow::DrawCurves(QModelIndex index)
     QwtPlotCanvas *canvas = new QwtPlotCanvas();
     ui->qwtPlot->setCanvas(canvas);
 
+
+
     Picker* zoomer = new Picker( canvas);
     connect(zoomer,SIGNAL(zoomed(QRectF)),this, SLOT(OnZoomed(QRectF)));
     zoomer->setZoomBase(QRectF(time[0],150,time[size - 1] - time[0], 200));
+
+    QwtPlotPicker * d_picker = new QwtPlotPicker( QwtPlot::xBottom, QwtPlot::yLeft,
+        QwtPlotPicker::CrossRubberBand, QwtPicker::AlwaysOn,
+        canvas );
+    d_picker->setStateMachine( new QwtPickerDragPointMachine() );
+    d_picker->setRubberBandPen( QColor( Qt::black ) );
+    d_picker->setRubberBand( QwtPicker::CrossRubberBand );
+    d_picker->setTrackerMode(QwtPlotPicker::AlwaysOff);
+
+
     QwtPlotPanner *panner = new QwtPlotPanner( canvas );
     panner->setMouseButton( Qt::LeftButton );
     QwtPlotMagnifier* mag =  new QwtPlotMagnifier( canvas );
@@ -392,20 +514,27 @@ void MainWindow::AddLogLevels()
     const UserTableModel *UserModel =
         qobject_cast<UserTableModel *>( ui->tableView->model() );
 
-    const QList<QPair<QString,QStringList> >& navigator = UserModel->GetLogNavigator();
+    const QList<program_t >& navigator = UserModel->GetLogNavigator();
     for(int i = 0; i < navigator.size(); i++)
     {
         QStandardItem *program = new QStandardItem(navigator[i].first.section("##",0,0));
         program->setData(navigator[i].first.section("##",1,1), Qt::DecorationRole);
         program->setEditable(false);
         program->setSelectable(true);
-        foreach (QString stepstr, navigator[i].second)
+        foreach (step_t step, navigator[i].second)
         {
-            QStandardItem *step = new QStandardItem(stepstr.section("##",0,0));
-            step->setData(stepstr.section("##",1,1),Qt::DecorationRole);
-            step->setEditable(false);
-            step->setSelectable(true);
-            program->appendRow(step);
+            QStandardItem *stepitem = new QStandardItem(step.first.section("##",0,0));
+            stepitem->setData(step.first.section("##",1,1),Qt::DecorationRole);
+            stepitem->setEditable(false);
+            stepitem->setSelectable(true);
+            foreach (QString scenario, step.second) {
+               QStandardItem *scenitem = new QStandardItem(scenario.section("##",0,0));
+               scenitem->setData(scenario.section("##",1,1),Qt::DecorationRole);
+               scenitem->setEditable(false);
+               scenitem->setSelectable(true);
+               stepitem->appendRow(scenitem);
+            }
+            program->appendRow(stepitem);
         }
         model->appendRow(program);
     }
@@ -488,10 +617,7 @@ void MainWindow::OnLegendDoubleClicked(QwtPlotItem * item, QColor color, int ind
     ui->qwtPlot->replot();
 }
 
-void MainWindow::OnFinishAnalyzingLog(bool flag)
-{
-    QMessageBox::information(ui->centralWidget,"Log Parser","finish analyzing all log files",QMessageBox::Ok );
-}
+
 
 void MainWindow::OnZoomed(QRectF point)
 {
