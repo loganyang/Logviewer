@@ -14,6 +14,9 @@
 #include "QDir"
 #include "lpkgreader.h"
 #include "logparser.h"
+#include "../Include/legend.h"
+#include "../Include/eventlogsortfilter.h"
+#include "../include/usertablemodel.h"
 namespace Ui {
 class MainWindow;
 }
@@ -36,22 +39,20 @@ signals:
 
 public slots:
     quint32 loadLogs();
+    void openEventLog(QString eventfile);
     void AnalysizeLog();
     void OpenLPKG();
     void SaveCurve();
     void ShowVersion();
-    void SetModel(QAbstractTableModel* model);
     void DrawCurves(QModelIndex index);
     void AddLogLevels();
     void OnClickLogFilter(QModelIndex index);
-    void OnDoubleClickedNavi(QModelIndex index);
-    void OnLegendDoubleClicked(QwtPlotItem *item, QColor color, int index);
+    void OnChangeCurveSettings(QwtPlotItem *item, tCurveSettingData data, int index);
     void OnLegendChecked(QwtPlotItem *item, bool on, int index);
     void OnZoomed(QRectF point);
-    void OnFinishAnalyzingLog(PARSER_Result result);
+    void OnFinishAnalyzingLog(PARSER_Result result, QStringList res);
     void UpdateStatusbar(QModelIndex index);
 private:
-    void UpdateView();
     Ui::MainWindow *ui;
     QDir m_LogDir;
     SensorDataItf m_sditf;
@@ -60,6 +61,9 @@ private:
     QHash<QString, Qt::CheckState> m_logFilter;
     QMessageBox* m_waitingBox;
     LPKGReader* m_lpkg;
+    DlgParserResult* m_dlgres;
+    EventLogSortFilter* m_LogSortFilter;
+    UserTableModel* m_model;
 };
 
 #endif // MAINWINDOW_H

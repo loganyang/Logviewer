@@ -7,6 +7,7 @@
 #include <QThread>
 #include <QDateTime>
 #include <QTextStream>
+#include <QWidget>
 enum PARSER_Result
 {
     PAR_CANCEL,
@@ -36,6 +37,27 @@ struct ControlKey
     QStringList ignoreErrors;
     QList<qint64> gaps;
 };
+namespace Ui {
+class DlgParserResult;
+}
+
+class DlgParserResult : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit DlgParserResult(QWidget *parent = 0);
+    ~DlgParserResult();
+    void addItem(QString item);
+    void clear();
+
+public slots:
+    void onOk(bool ok);
+
+private:
+    Ui::DlgParserResult *ui;
+};
+
 
 class LogParser : public QObject
 {
@@ -45,7 +67,7 @@ public:
     ~LogParser();
 
 signals:
-    void sigFinished(PARSER_Result result);
+    void sigFinished(PARSER_Result result, QStringList res);
 
 public slots:
     void start(QString path);

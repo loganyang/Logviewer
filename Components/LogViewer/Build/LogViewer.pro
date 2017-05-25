@@ -39,7 +39,9 @@ SOURCES +=\
     ../Source/sensordataitf.cpp \
     ../Source/legend.cpp \
     ../Source/logparser.cpp \
-    ../Source/lpkgreader.cpp
+    ../Source/lpkgreader.cpp \
+    ../Source/dlgcurvesettings.cpp \
+    ../Source/eventlogsortfilter.cpp
 
 
 HEADERS  += \
@@ -50,11 +52,16 @@ HEADERS  += \
     ../Include/legend.h \
     ../Include/globaldefines.h \
     ../Include/logparser.h \
-    ../Include/lpkgreader.h
+    ../Include/lpkgreader.h \
+    ../Include/dlgcurvesettings.h \
+    ../Include/eventlogsortfilter.h
+
 
 FORMS    += \
     ../Forms/mainwindow.ui \
-    ../Forms/lpkgreader.ui
+    ../Forms/lpkgreader.ui \
+    ../Forms/dlgcurvesettings.ui \
+    ../Forms/dlgParserResult.ui
 
 
 

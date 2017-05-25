@@ -17,6 +17,15 @@ public:
     {
         return LogFilters;
     }
+    QStringList getFilterValue(QString key = "")
+    {
+        if(LogFilters.contains(key))
+        {
+            return LogFilters.value(key);
+        }
+        return QStringList();
+    }
+
     bool interest(QString line, QString key = "")
     {
         if(key.isEmpty())
@@ -47,12 +56,12 @@ public:
 private:
     GlobalDefines()
     {
-        LogFilters.insert("program",QStringList() <<"67174418" << "67175216"<<"67174912" //start program; start step; start pre-test
+        LogFilters.insert("Program",QStringList() <<"67174418" << "67175216"<<"67174912" //start program; start step; start pre-test
                           <<"67174420"<<"67175205" <<"67174421" //pause program; pause successfully; abort program
                           <<"67175218" <<"67175224" //dry step ; cooling down
                           <<"67174656" // start the self-test
                           );
-        LogFilters.insert("scenario", QStringList() << "67174995" //Start heating level sensor
+        LogFilters.insert("Scenario", QStringList() << "67174995" //Start heating level sensor
                                    << "67175210"<<"67175212"      //Start filling" ; "Moveing the rotary valve to the sealing position"
                                    << "67175213"<< "67175211"//"Start processing" << "Moving the rotary valve to the tube position"
                                    << "67175207"); //";Draining.");
@@ -62,10 +71,10 @@ private:
 //                          <<"67174420" // puase
 //                          <<"67174421" // abort
 //                          );
-        LogFilters.insert("info", QStringList()<< ";Info;");
-        LogFilters.insert("warning", QStringList()<< ";Warning;");
-        LogFilters.insert("error", QStringList()<< ";Error;");
-        LogFilters.insert("debug", QStringList()<< ";Debug;");
+        LogFilters.insert("Info", QStringList()<< ";Info;");
+        LogFilters.insert("Warning", QStringList()<< ";Warning;");
+        LogFilters.insert("Error", QStringList()<< ";Error;");
+        LogFilters.insert("Debug", QStringList()<< ";Debug;");
 
     }
     QMap<QString,QStringList> LogFilters;

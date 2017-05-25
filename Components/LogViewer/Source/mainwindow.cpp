@@ -16,7 +16,6 @@
 #include "qwt_date_scale_engine.h"
 #include "qwt_picker_machine.h"
 #include "qwt_plot_picker.h"
-#include "../Include/legend.h"
 #include "qwt_plot_grid.h"
 #include "QMessageBox"
 #include "QRadioButton"
@@ -29,6 +28,8 @@
 #include "../Include/lpkgreader.h"
 #include "qwt_plot_renderer.h"
 #include "qstatusbar.h"
+#include "QListWidget"
+
 class Picker : public QwtPlotZoomer
 {
   public:
@@ -112,6 +113,8 @@ public:
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
+    m_model(NULL),
+    m_LogSortFilter(NULL),
     ui(new Ui::MainWindow)
 {
 
@@ -119,58 +122,37 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     setAutoFillBackground( true );
     setWindowTitle("Himalaya Logviewer");
-//    setPalette(QPalette( Qt::darkGray));
-//    QPalette pal = palette();
 
-//    const QColor buttonColor = pal.color( QPalette::Button );
-
-//    QLinearGradient gradient( rect().topLeft(), rect().bottomLeft() );
-//    gradient.setColorAt( 0.0, Qt::white );
-//    gradient.setColorAt( 0.7, buttonColor );
-//    gradient.setColorAt( 1.0, buttonColor );
-//    pal.setBrush( QPalette::Window, gradient );
-//    setPalette( pal );
-    //init central widget
     ui->centralWidget->setAttribute(Qt::WA_TranslucentBackground);
     ui->tabWidget->setTabOrder(ui->event,ui->sensor);
     ui->tabWidget->setAttribute(Qt::WA_TranslucentBackground);
     ui->tableView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     ui->tableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    ui->treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    ui->treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     ui->tableView->setAttribute(Qt::WA_TranslucentBackground);
     ui->tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->tableView->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-//    ui->tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-//    ui->tableView->resizeColumnsToContents();
-//    ui->tableView->resizeRowsToContents();
-    //ui->tableView->setPalette(QPalette(Qt::gray));
-    // draw sensor data plot
+
     connect(ui->tableView,SIGNAL(doubleClicked(QModelIndex)),this,SLOT(DrawCurves(QModelIndex)));
     connect(ui->tableView,SIGNAL(clicked(QModelIndex)),this,SLOT(UpdateStatusbar(QModelIndex)));
 
-
     //init plot
     ui->qwtPlot->setAutoReplot(false);
-//    QwtPlotCanvas *canvas = new QwtPlotCanvas();
-//   // canvas->setPalette( Qt::lightGray );
-//    //canvas->setBorderRadius( 10 );
-//    ui->qwtPlot->setCanvas(canvas);
-
     DateScaleDraw* xAxisScalreDraw = new DateScaleDraw();
+    xAxisScalreDraw->setLabelRotation(-60);
+    xAxisScalreDraw->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     ui->qwtPlot->setAxisScaleDraw(QwtPlot::xBottom, xAxisScalreDraw);
     ui->qwtPlot->setAxisScaleEngine(QwtPlot::xBottom, new QwtDateScaleEngine());
-
-
-
-
-
+    ui->qwtPlot->setAxisMaxMajor(QwtPlot::xBottom,36);
+    ui->qwtPlot->setAxisMaxMinor(QwtPlot::xBottom,10);
+    //init legend
     Legend *legend = new Legend;
     ui->qwtPlot->insertLegend( legend, QwtPlot::LeftLegend );
     connect( legend, SIGNAL( checked( QwtPlotItem *, bool, int ) ),
         SLOT(OnLegendChecked(QwtPlotItem *,bool, int)) );
-    connect( legend, SIGNAL( doubleClicked(QwtPlotItem*,QColor,int)),
-        SLOT(OnLegendDoubleClicked(QwtPlotItem*,QColor,int)));
-
-
+    connect( legend, SIGNAL( changeCurveSettings(QwtPlotItem*,tCurveSettingData,int)),
+        SLOT(OnChangeCurveSettings(QwtPlotItem*,tCurveSettingData,int)));
     //init menu
      QAction *ccfg = new QAction("&Open log",this);
      connect(ccfg,SIGNAL(triggered()),this,SLOT(loadLogs()));
@@ -204,6 +186,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
      m_lpkg = new LPKGReader();
      m_lpkg->setVisible(false);
+     m_dlgres = new DlgParserResult();
+     m_dlgres->setVisible(false);
 
     statusBar()->setVisible(true);
     statusBar()->setSizeGripEnabled(false);
@@ -213,6 +197,7 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
     delete m_lpkg;
+    delete m_dlgres;
     delete ui;
 }
 
@@ -223,14 +208,12 @@ void MainWindow::UpdateStatusbar(QModelIndex index)
     if(select->hasSelection())
     {
         QModelIndexList gaps = select->selectedRows(1);
-        const UserTableModel *model =
-            qobject_cast<UserTableModel *>( ui->tableView->model() );
         bool ok = false;
         quint64 sum = 0;
         quint64 tmp = 0;
         foreach (QModelIndex gap, gaps) {
             tmp = 0;
-            tmp = model->data(gap, Qt::EditRole).toULongLong(&ok);
+            tmp = m_model->data(gap, Qt::EditRole).toULongLong(&ok);
             if(ok)
             {
                 sum += tmp;
@@ -265,8 +248,8 @@ quint32 MainWindow::loadLogs()
     {
         return 1;
     }
-    emit sigNewLogsSet(file);
-
+    setWindowTitle("Himalaya Logviewer : " + file);
+    openEventLog(file);
     m_LogDir = QFileInfo(file).absoluteDir();
 
     QFile tmpf(".data");
@@ -277,9 +260,29 @@ quint32 MainWindow::loadLogs()
     }
     return 0;
 }
+void MainWindow::openEventLog(QString eventfile)
+{
+    if(m_model == NULL)
+    {
+        m_model = new UserTableModel();
+    }
+    if(m_LogSortFilter == NULL)
+    {
+        m_LogSortFilter = new EventLogSortFilter();
+        connect(ui->treeView,SIGNAL(clicked(QModelIndex)), this, SLOT(OnClickLogFilter(QModelIndex)));
+    }
+    m_model->LoadNewLogs(eventfile);
+    m_LogSortFilter->setSourceModel(m_model);
+    ui->tableView->setModel(m_LogSortFilter);
+    ui->tableView->setWordWrap(true);
+    AddLogLevels();
+    init();
+    m_model->setView(ui->tableView);
+}
 
 void MainWindow::AnalysizeLog()
 {
+    m_dlgres->clear();
     if(QFile::exists(".data"))
     {
         QFile tmpf(".data");
@@ -313,13 +316,14 @@ void MainWindow::AnalysizeLog()
             tmpf.close();
         }
         emit sigAnalysizeLog(dirstr);
+        m_dlgres->setWindowTitle(dirstr);
     }
     else
     {
         QMessageBox::information(ui->centralWidget,"Log Parser","The directory is not existed",QMessageBox::Ok );
     }
 }
-void MainWindow::OnFinishAnalyzingLog(PARSER_Result result)
+void MainWindow::OnFinishAnalyzingLog(PARSER_Result result, QStringList res)
 {
     switch(result)
     {
@@ -327,10 +331,12 @@ void MainWindow::OnFinishAnalyzingLog(PARSER_Result result)
         QMessageBox::information(ui->centralWidget,"Log Parser","There is no any log files in your directory!!",QMessageBox::Ok );
         break;
     case PAR_SUCCESSFULE:
-        QMessageBox::information(ui->centralWidget,"Log Parser","Test passed.         ",QMessageBox::Ok );
-        break;
     case PAR_FAIL:
-        QMessageBox::information(ui->centralWidget,"Log Parser","Test failed.               " ,QMessageBox::Ok );
+        foreach (QString err, res)
+        {
+            m_dlgres->addItem(err);
+        }
+        m_dlgres->show();
         break;
     default:
         ;
@@ -363,15 +369,6 @@ void MainWindow::init()
     ui->tableView->horizontalHeader()->setStretchLastSection(true);
 }
 
-void MainWindow::SetModel(QAbstractTableModel *model)
-{
-    delete ui->tableView->model();
-    ui->tableView->setModel(model);
-    ui->tableView->setWordWrap(true);
-    AddLogLevels();
-    init();
-    dynamic_cast<UserTableModel*>(model)->setView(ui->tableView);
-}
 
 void MainWindow::DrawCurves(QModelIndex index)
 {
@@ -511,19 +508,17 @@ void MainWindow::AddLogLevels()
 
 
     //add navigator
-    const UserTableModel *UserModel =
-        qobject_cast<UserTableModel *>( ui->tableView->model() );
-
-    const QList<program_t >& navigator = UserModel->GetLogNavigator();
-    for(int i = 0; i < navigator.size(); i++)
+    const QList<program_t > * navigator = m_model->GetLogNavigator();
+    for(int i = 0; i < navigator->size(); i++)
     {
-        QStandardItem *program = new QStandardItem(navigator[i].first.section("##",0,0));
-        program->setData(navigator[i].first.section("##",1,1), Qt::DecorationRole);
+        QStandardItem *program = new QStandardItem(navigator->at(i).first.section("##",0,0));
+        program->setData(navigator->at(i).first.section("##",1,1), Qt::DecorationRole);
         program->setEditable(false);
         program->setSelectable(true);
-        foreach (step_t step, navigator[i].second)
+        foreach (step_t step, navigator->at(i).second)
         {
             QStandardItem *stepitem = new QStandardItem(step.first.section("##",0,0));
+
             stepitem->setData(step.first.section("##",1,1),Qt::DecorationRole);
             stepitem->setEditable(false);
             stepitem->setSelectable(true);
@@ -538,29 +533,6 @@ void MainWindow::AddLogLevels()
         }
         model->appendRow(program);
     }
-
-    connect(ui->treeView,SIGNAL(clicked(QModelIndex)), this, SLOT(OnClickLogFilter(QModelIndex)));
-//    connect(ui->treeView,SIGNAL(doubleClicked(QModelIndex)), this, SLOT(OnDoubleClickedNavi(QModelIndex)));
-
-}
-
-void MainWindow::OnDoubleClickedNavi(QModelIndex index)
-{
-    if(!index.isValid())
-    {
-        return;
-    }
-    const QStandardItemModel *model =
-        qobject_cast<QStandardItemModel *>( ui->treeView->model() );
-    bool ok = false;
-
-    quint32 row = model->data(index,Qt::DecorationRole).toUInt(&ok);
-    if(ok)
-    {
-        ui->tableView->scrollTo(ui->tableView->model()->index(row,0,QModelIndex()));
-        ui->tableView->selectRow(row);
-    }
-
 }
 
 void MainWindow::OnClickLogFilter(QModelIndex index)
@@ -580,7 +552,20 @@ void MainWindow::OnClickLogFilter(QModelIndex index)
             {
                 m_logFilter.remove(item->text());
                 m_logFilter.insert(item->text(),item->checkState());
-                UpdateView();
+            }
+            QHashIterator<QString, Qt::CheckState> it(m_logFilter);
+            QStringList filterValues = QStringList();
+            while(it.hasNext())
+            {
+                it.next();
+                if(it.value() == Qt::Checked)
+                {
+                    filterValues += GlobalDefines::Instance().getFilterValue(it.key());
+                }
+            }
+            if(m_LogSortFilter)
+            {
+                m_LogSortFilter->applyFilter(QRegExp(filterValues.join("|")));
             }
         }
     }
@@ -590,8 +575,12 @@ void MainWindow::OnClickLogFilter(QModelIndex index)
         quint32 row = model->data(index,Qt::DecorationRole).toUInt(&ok);
         if(ok)
         {
-            ui->tableView->scrollTo(ui->tableView->model()->index(row,0,QModelIndex()));
-            ui->tableView->selectRow(row);
+            QModelIndex index = m_LogSortFilter->mapFromSource(m_model->index(row,0,QModelIndex()));
+            if(index.isValid())
+            {
+                ui->tableView->selectionModel()->select(index,QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                ui->tableView->scrollTo(index,QAbstractItemView::PositionAtTop);
+            }
         }
     }
 
@@ -600,20 +589,13 @@ void MainWindow::OnClickLogFilter(QModelIndex index)
 void MainWindow::OnLegendChecked(QwtPlotItem * item, bool on, int index)
 {
     item->setVisible(on);
-//    if(on)
-//    {
-//        QwtPlotCurve* curve = dynamic_cast<QwtPlotCurve*>(item);
-//        QPen pen = curve->pen();
-//        pen.setWidth(4);
-//        curve->setPen(pen);
-//    }
     ui->qwtPlot->replot();
 }
 
-void MainWindow::OnLegendDoubleClicked(QwtPlotItem * item, QColor color, int index)
+void MainWindow::OnChangeCurveSettings(QwtPlotItem * item, tCurveSettingData data, int index)
 {
     QwtPlotCurve* curve = dynamic_cast<QwtPlotCurve*>(item);
-    curve->setPen(QPen(color));
+    curve->setPen(QPen(data.color,2));
     ui->qwtPlot->replot();
 }
 
@@ -622,40 +604,4 @@ void MainWindow::OnLegendDoubleClicked(QwtPlotItem * item, QColor color, int ind
 void MainWindow::OnZoomed(QRectF point)
 {
     qDebug()<<point.x()<<" , " << point.y()<<" , " << point.width()<<" , " << point.height();
-}
-
-void MainWindow::UpdateView()
-{
-    const UserTableModel *model =
-        qobject_cast<UserTableModel *>( ui->tableView->model() );
-
-    for(int i = 0; i< model->rowCount(QModelIndex()); i++)
-    {
-        bool show = false;
-        QString line =QString("%1;%2; %3").arg(model->data(model->index(i,2),Qt::DisplayRole).toString())
-                                       .arg(model->data(model->index(i,3),Qt::DisplayRole).toString())
-                                      .arg(model->data(model->index(i,4),Qt::DisplayRole).toString());
-        QHashIterator<QString, Qt::CheckState> it(m_logFilter);
-        while(it.hasNext())
-        {
-            it.next();
-            if(it.value() == Qt::Checked)
-            {
-                if(GlobalDefines::Instance().interest(line,it.key()))
-                {
-                    show = true;
-                    break;
-                }
-            }
-        }
-        if(show)
-        {
-            ui->tableView->showRow(i);
-        }
-        else
-        {
-            ui->tableView->hideRow(i);
-        }
-
-    }
 }

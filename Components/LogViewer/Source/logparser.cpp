@@ -1,4 +1,5 @@
 #include "../Include/logparser.h"
+#include "ui_dlgparserresult.h"
 #include "QThread"
 #include "QRegularExpression"
 #include "QFile"
@@ -95,6 +96,34 @@ void ControlKey::add(QString &line)
 
 }
 
+DlgParserResult::DlgParserResult(QWidget *parent) :
+    QWidget(parent),
+    ui(new Ui::DlgParserResult)
+{
+    ui->setupUi(this);
+    setWindowTitle("result");
+    connect(ui->btnOk,SIGNAL(clicked(bool)), this, SLOT(onOk(bool)));
+}
+
+DlgParserResult::~DlgParserResult()
+{
+    delete ui;
+}
+
+void DlgParserResult::addItem(QString item)
+{
+    ui->itemlist->addItem(item);
+}
+void DlgParserResult::clear()
+{
+    setWindowTitle("result");
+    ui->itemlist->clear();
+}
+void DlgParserResult::onOk(bool ok)
+{
+    hide();
+}
+
 LogParser::LogParser() : QObject(0)
 {
     QStringList inter = QStringList() << ";Error;" << "User pause the program" << "User abort the program"<< "Primaris started";
@@ -173,6 +202,7 @@ bool LogParser::CheckErrors()
     QString CfgErrorName = QCoreApplication::applicationDirPath() + QDir::separator() + "errors.ini";
     QFile ErrorListFile(CfgErrorName);
     QString regstr ="90909090909090";
+    QStringList res;
     if(ErrorListFile.exists() && ErrorListFile.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Log("Open and Read the error list: " + CfgErrorName);
@@ -188,7 +218,7 @@ bool LogParser::CheckErrors()
     else
     {
         Log("Cann't read the error list file: " + CfgErrorName);
-        emit sigFinished(PAR_FAIL);
+        emit sigFinished(PAR_FAIL,res);
         return false;
     }
     QRegExp reg(regstr);
@@ -208,7 +238,7 @@ bool LogParser::CheckErrors()
                     if(ReadData.contains(reg))
                     {
                         Log("There are errors in: " +  m_LogDir.absolutePath() + "/" + logstr + ":  " + ReadData.trimmed());
-                        emit sigFinished(PAR_FAIL);
+                        emit sigFinished(PAR_FAIL,res);
                         return false;
                     }
                 }
@@ -217,7 +247,7 @@ bool LogParser::CheckErrors()
             else
             {
                 Log("Cann't open the log file: " + logstr);
-                emit sigFinished(PAR_FAIL);
+                emit sigFinished(PAR_FAIL, res);
                 return false;
             }
             haveLogFile = true;
@@ -225,19 +255,19 @@ bool LogParser::CheckErrors()
         if(haveLogFile)
         {
             Log("There are no any errors in: " +  m_LogDir.absolutePath());
-            emit sigFinished(PAR_SUCCESSFULE);
+            emit sigFinished(PAR_SUCCESSFULE,res);
         }
         else
         {
             Log("There are no any log files in: " +  m_LogDir.absolutePath());
-            emit sigFinished(PAR_CANCEL);
+            emit sigFinished(PAR_CANCEL,res);
         }
         return true;
     }
     else
     {
         Log("The log directory is not existed: " + m_LogDir.absolutePath());
-        emit sigFinished(PAR_FAIL);
+        emit sigFinished(PAR_FAIL,res);
         return false;
     }
 }
@@ -279,7 +309,7 @@ void LogParser::writeCSV()
         }
     }
     csv.close();
-    emit sigFinished(PAR_SUCCESSFULE);
+    emit sigFinished(PAR_SUCCESSFULE, QStringList());
 }
 
 void LogParser::Log(QString log)

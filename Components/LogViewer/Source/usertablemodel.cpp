@@ -20,7 +20,20 @@ bool UserTableModel::isInterest(QString line) const
 
 bool UserTableModel::isStartProgram(QString line)
 {
-    return line.contains("67174418");// || line.contains("67174927");//User start the program ; bottle check
+     return line.contains("67174418") || //User start the program
+            line.contains("67174927"); // start bottle check
+}
+bool UserTableModel::isStartSelfttest(QString line)
+{
+    return line.contains("67174656"); // start selftest
+}
+bool UserTableModel::isShutDown(QString line)
+{
+    return line.contains("67174416"); // user shutdown instrument
+}
+bool UserTableModel::isPowerFail(QString line)
+{
+    return line.contains("67176214"); //power failure
 }
 bool UserTableModel::isStartStep(QString line)
 {
@@ -31,7 +44,7 @@ bool UserTableModel::isStartStep(QString line)
     }
     QStringList steps = QStringList()<<"67175216"<<"67174912" // start step; start pre-test
                                        <<"67175218" <<"67175224" //dry step ; cooling down
-                                       ; //bottle check for tube
+                                       ; //
     return steps.contains(fields.at(3)) ;//Start Step
 }
 
@@ -55,17 +68,7 @@ bool UserTableModel::isStartScenario(QString line)
 
 bool UserTableModel::isUserOperation(QString line)
 {
-    QStringList fields = line.split(";");
-    if(fields.size() < 4)
-    {
-        return false;
-    }
-    QStringList UserOperations = QStringList()<<"67174416" // user shutdow device
-                      <<"67176214" // power failure
-                      <<"67174927" // bottle check
-                      <<"67174656" // self-test
-                      ;
-    return UserOperations.contains(fields.at(3));
+    return false;
 }
 QVariant UserTableModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
@@ -101,11 +104,12 @@ QVariant UserTableModel::data(const QModelIndex &index, int role) const
     {
         return QVariant();
     }
-    if(index.row() >= m_items.count())
+    const Event& ev = m_items[index.row()];
+    if(index.row() >= m_items.count() ||
+            (m_TypeFilter.contains(ev.type) && m_TypeFilter.value(ev.type)))
     {
         return QVariant();
     }
-    const Event& ev = m_items[index.row()];
 
     if(index.column() == 0)
     {
@@ -203,18 +207,42 @@ void UserTableModel::FilterEvent(QString EventLogs)
         while (!log.atEnd()) {
             QString ReadData = log.readLine();
             QStringList fields = ReadData.split(";");
-            if(isInterest(ReadData))
+            //if(isInterest(ReadData))
             {
                 if(fields.size() >= 5)
                 {
                     m_items.push_back(Event(fields[0],fields[1],fields[2],fields[4]));
                 }
             }
-            if(isStartProgram(ReadData))
+            if(isStartProgram(ReadData)) // the first level
             {
                 newStartProgram = true;
-                QString ProgramName = fields[4].section(" ",4,-9);
-                m_navigator.push_back(program_t(QString("%1##%2").arg(ProgramName).arg(m_items.size() - 1),
+                QString Name = fields[4].section(" ",4,-9);
+                m_navigator.push_back(program_t(QString("%1##%2").arg(Name).arg(m_items.size() - 1),
+                                   QList<step_t > ()));
+            }
+            else if(isStartSelfttest(ReadData)) //the first level
+            {
+                newStartProgram = false;
+                newStartStep = false;
+                QString Name = "Selftest";
+                m_navigator.push_back(program_t(QString("%1##%2").arg(Name).arg(m_items.size() - 1),
+                                   QList<step_t > ()));
+            }
+            else if(isPowerFail(ReadData))
+            {
+                newStartProgram = false;
+                newStartStep = false;
+                QString Name = "Power failure";//.section(" ",4,-9);
+                m_navigator.push_back(program_t(QString("%1##%2").arg(Name).arg(m_items.size() - 1),
+                                   QList<step_t > ()));
+            }
+            else if(isShutDown(ReadData))
+            {
+                newStartProgram = false;
+                newStartStep = false;
+                QString Name = "Shutdown";//.section(" ",4,-9);
+                m_navigator.push_back(program_t(QString("%1##%2").arg(Name).arg(m_items.size() - 1),
                                    QList<step_t > ()));
             }
             else if(isStartStep(ReadData))
@@ -245,11 +273,6 @@ void UserTableModel::FilterEvent(QString EventLogs)
                 QList<program_t >::iterator pit = m_navigator.end() - 1;
                 QList<step_t >::iterator sit = pit->second.end() - 1;
                 sit->second.push_back(QString("%1##%2").arg(fields[4]).arg(m_items.size() - 1));
-            }
-            else if(isUserOperation(ReadData))
-            {
-                m_navigator.push_back(program_t(QString("%1##%2").arg(fields[4]).arg(m_items.size() - 1),
-                                   QList<step_t > ()));
             }
         }
     }

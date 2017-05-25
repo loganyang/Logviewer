@@ -10,7 +10,7 @@
 #include <qpainter.h>
 #include "QColorDialog"
 #include "qwt_plot_curve.h"
-
+#include "../Include/dlgcurvesettings.h"
 
 static void qwtRenderBackground( QPainter *painter,
     const QRectF &rect, const QWidget *widget )
@@ -397,11 +397,13 @@ void Legend::handleDoubleClick(const QModelIndex &index )
     }
     const qlonglong ptr = item->data().value<qlonglong>();
 
-    QColorDialog xx;
-    QColor col = xx.getColor(Qt::black);
-
-    Q_EMIT doubleClicked((QwtPlotItem *)ptr, col, 0);
-    item->setForeground(QBrush(col));
+    tCurveSettingData data;
+    dlgCurveSettings settings;
+    if(settings.getCurveSettingData(data))
+    {
+        Q_EMIT changeCurveSettings((QwtPlotItem *)ptr, data, 0);
+        item->setForeground(QBrush(data.color));
+    }
 }
 
 

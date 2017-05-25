@@ -12,18 +12,14 @@ int main(int argc, char *argv[])
     MainWindow w;
 
     qRegisterMetaType<PARSER_Result>("PARSER_Result");
-    Startup start;
+    qRegisterMetaType<tCurveSettingData>("tCurveSettingData");
     QThread* thread = new QThread();
     LogParser* parser = new LogParser;
     parser->moveToThread(thread);
     thread->start(QThread::NormalPriority);
 
-    QObject::connect(&w,SIGNAL(sigNewLogsSet(QString)),
-            &start,SLOT(LoadNewLogs(QString)));
-    QObject::connect(&start,SIGNAL(sigSetModel(QAbstractTableModel*)),
-            &w,SLOT(SetModel(QAbstractTableModel*)));
     QObject::connect(&w, SIGNAL(sigAnalysizeLog(QString)),parser,SLOT(start(QString)));
-    QObject::connect(parser,SIGNAL(sigFinished(PARSER_Result)), &w, SLOT(OnFinishAnalyzingLog(PARSER_Result)));
+    QObject::connect(parser,SIGNAL(sigFinished(PARSER_Result, QStringList)), &w, SLOT(OnFinishAnalyzingLog(PARSER_Result, QStringList)));
 
     w.init();
     w.show();

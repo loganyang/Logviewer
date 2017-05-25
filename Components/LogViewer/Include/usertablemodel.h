@@ -10,7 +10,6 @@
 #include <QPair>
 #include <QDate>
 #include <QTableView>
-
 typedef QPair<QString,QStringList> step_t;
 typedef QPair<QString, QList<step_t > > program_t;
 struct Event
@@ -37,14 +36,18 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     Qt::ItemFlags flags(const QModelIndex &index) const;
     void setView(QTableView* view){m_view = view;}
-    bool isStartProgram(QString line);
-    bool isStartStep(QString line);
-    bool isStartScenario(QString line);
-    bool isUserOperation(QString line);
-    const QList<program_t > & GetLogNavigator() const
+    bool isStartProgram(QString line); //the first level
+    bool isStartSelfttest(QString line); // the first level
+    bool isShutDown(QString line); // the first level
+    bool isPowerFail(QString line); // power failure
+    bool isStartStep(QString line); // the second level
+    bool isStartScenario(QString line); // the third level
+    bool isUserOperation(QString line); // the third level
+    const QList<program_t > * GetLogNavigator() const
     {
-        return m_navigator;
+        return &m_navigator;
     }
+    void setTypeFilter(const QHash<QString, Qt::CheckState>& filter){m_TypeFilter = filter;}
 //    QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
 signals:
     void sigUpdateModel();
@@ -55,6 +58,9 @@ public slots:
     void AnalyzeLog();
 private:
     void ResetLogs();
+
+private:
+    QHash<QString, Qt::CheckState> m_TypeFilter;
 public:
     QList<Event> m_items;
     QList<program_t > m_navigator;

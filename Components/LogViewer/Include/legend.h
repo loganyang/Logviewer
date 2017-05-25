@@ -2,7 +2,7 @@
 #define _LEGEND_H_
 
 #include <qwt_abstract_legend.h>
-
+#include "dlgcurvesettings.h"
 class LegendTreeView;
 class QStandardItem;
 class QModelIndex;
@@ -25,7 +25,7 @@ public:
 
 Q_SIGNALS:
     void checked( QwtPlotItem *plotItem, bool on, int index );
-    void doubleClicked(QwtPlotItem *plotItem, QColor color, int index);
+    void changeCurveSettings(QwtPlotItem *plotItem, tCurveSettingData data, int index);
 
 public Q_SLOTS:
     virtual void updateLegend( const QVariant &,
