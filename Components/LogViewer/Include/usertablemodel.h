@@ -37,6 +37,7 @@ public:
     Qt::ItemFlags flags(const QModelIndex &index) const;
     void setView(QTableView* view){m_view = view;}
     bool isStartProgram(QString line); //the first level
+    bool isStartBottleCheck(QString line); // the first level
     bool isStartSelfttest(QString line); // the first level
     bool isShutDown(QString line); // the first level
     bool isPowerFail(QString line); // power failure
@@ -56,6 +57,7 @@ public slots:
     void FilterEvent(QString EventLogs);
     void DrawData(QString EventLogs);
     void AnalyzeLog();
+    QModelIndex IndexByDate(const QDateTime& dt);
 private:
     void ResetLogs();
 

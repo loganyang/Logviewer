@@ -101,8 +101,14 @@ DlgParserResult::DlgParserResult(QWidget *parent) :
     ui(new Ui::DlgParserResult)
 {
     ui->setupUi(this);
-    setWindowTitle("result");
+    setWindowTitle("Select the directory with logs");
+    resize(QSize(800,652));
+    ui->tbRes->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->tbRes->setSortingEnabled(true);
+    ui->tbRes->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tbRes->setSelectionMode(QAbstractItemView::SingleSelection);
     connect(ui->btnOk,SIGNAL(clicked(bool)), this, SLOT(onOk(bool)));
+    connect(ui->tbRes,SIGNAL(itemDoubleClicked(QTableWidgetItem*)),this,SLOT(onDoubleClicked(QTableWidgetItem*)));
 }
 
 DlgParserResult::~DlgParserResult()
@@ -110,18 +116,50 @@ DlgParserResult::~DlgParserResult()
     delete ui;
 }
 
-void DlgParserResult::addItem(QString item)
+
+void DlgParserResult::show()
 {
-    ui->itemlist->addItem(item);
+    ui->tbRes->clear();
+    ui->tbRes->setColumnCount(2);
+    ui->tbRes->setHorizontalHeaderLabels(QStringList()<<"Time"<<"Event");
+    ui->tbRes->horizontalHeader()->setStretchLastSection(true);
+    ui->tbRes->setColumnWidth(0,206);
+    ui->tbRes->setColumnWidth(1,452);
+
+    setWindowTitle(result.logdir);
+    QMap<QString,QString> smap;
+    for(int i = 0; i < result.items.size(); i++ )
+    {
+        QStringList fi = result.items[i].split(";;");
+//        QDateTime pre = QDateTime::fromString(fi[0],"yyyy-MM-dd hh:mm:ss.zzz");
+        smap.insert(fi[0],fi[1]); //ignore ss.zzz
+    }
+    QMapIterator<QString,QString> itor(smap);
+    while(itor.hasNext())
+    {
+        itor.next();
+        ui->tbRes->insertRow(0);
+        ui->tbRes->setItem(0,0,new QTableWidgetItem(itor.key()));
+        ui->tbRes->setItem(0,1,new QTableWidgetItem(itor.value()));
+    }
+    QWidget::show();
 }
-void DlgParserResult::clear()
-{
-    setWindowTitle("result");
-    ui->itemlist->clear();
-}
+
 void DlgParserResult::onOk(bool ok)
 {
     hide();
+}
+void DlgParserResult::onDoubleClicked(QTableWidgetItem *item)
+{
+    if(!item)
+        return;
+    QTableWidgetItem* dateitem = item;
+    if(item->column() != 0)
+    {
+        dateitem = ui->tbRes->item(item->row(),0);
+    }
+    QDateTime dt = QDateTime::fromString(dateitem->data(Qt::DisplayRole).toString(),"yyyy-MM-dd hh:mm:ss.zzz");
+    emit positionAt(dt, result.logdir);
 }
 
 LogParser::LogParser() : QObject(0)
@@ -188,21 +226,22 @@ LogParser::~LogParser()
 
 void LogParser::start(QString path)
 {
-    m_LogDir = QDir(path);
     //parse();
     bool res  = mp_LogFile->open(QIODevice::Text | QIODevice::Append);
     m_log.setDevice(mp_LogFile);
-    (void)CheckErrors();
+    (void)CheckErrors(path);
 
     mp_LogFile->close();
 
 }
-bool LogParser::CheckErrors()
+bool LogParser::CheckErrors(QString path)
 {
-    QString CfgErrorName = QCoreApplication::applicationDirPath() + QDir::separator() + "errors.ini";
+    QString CfgErrorName = QCoreApplication::applicationDirPath() + QDir::separator() + "errors.csv";
     QFile ErrorListFile(CfgErrorName);
     QString regstr ="90909090909090";
-    QStringList res;
+    Analyze_Res res;
+    res.logdir = path;
+    QHash<QString,QString> err2des;
     if(ErrorListFile.exists() && ErrorListFile.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Log("Open and Read the error list: " + CfgErrorName);
@@ -210,7 +249,14 @@ bool LogParser::CheckErrors()
             QString ReadData = ErrorListFile.readLine();
             if(!ReadData.trimmed().isEmpty())
             {
-                regstr += ("|" + ReadData.split(",").at(0));
+                QStringList fs = ReadData.split(",");
+                regstr += ("|" + fs[0]);
+                if(fs.size() > 2) //Service string
+                {
+                   fs[2].chop(1);// remove \n
+                   regstr += (".*" + fs[2]);
+                }
+                err2des.insert( fs[0], fs[1]);
             }
         }
         ErrorListFile.close();
@@ -218,18 +264,21 @@ bool LogParser::CheckErrors()
     else
     {
         Log("Cann't read the error list file: " + CfgErrorName);
-        emit sigFinished(PAR_FAIL,res);
+        res.items<<"00;;Cann't read the error list file.";
+        res.code = Analyze_Res::PAR_FAIL;
+        emit sigFinished(res);
         return false;
     }
     QRegExp reg(regstr);
-    if(m_LogDir.exists())
+    QDir logDir(path);
+    if(logDir.exists())
     {
         bool haveLogFile = false;
-        Log("Try to check errors in " + m_LogDir.absolutePath());
-        foreach (QString logstr,m_LogDir.entryList(QStringList() <<"HISTOCOREPEARL_*_*.log"<<"HISTOCOREPRIMARIS_*_*.log"
-                                                   , QDir::NoFilter,QDir::Name))
+        Log("Try to check errors in " + logDir.absolutePath());
+        foreach (QString logstr,logDir.entryList(QStringList() <<"HISTOCOREPEARL_*_*.log"<<"HISTOCOREPRIMARIS_*_*.log"
+                                                   , QDir::NoFilter,QDir::Time))
         {
-            QFile log(m_LogDir.absolutePath() + "/" + logstr);
+            QFile log(logDir.absolutePath() + "/" + logstr);
             if(log.open(QIODevice::ReadOnly | QIODevice::Text))
             {
                 while (!log.atEnd())
@@ -237,9 +286,12 @@ bool LogParser::CheckErrors()
                     QString ReadData = log.readLine();
                     if(ReadData.contains(reg))
                     {
-                        Log("There are errors in: " +  m_LogDir.absolutePath() + "/" + logstr + ":  " + ReadData.trimmed());
-                        emit sigFinished(PAR_FAIL,res);
-                        return false;
+                        Log("There are errors in: " +  logDir.absolutePath() + "/" + logstr + ":  " + ReadData.trimmed());
+                        QStringList fields = ReadData.split(";");
+                        if(fields.size() > 1)
+                        {
+                            res.items<<fields[0] + ";;" + fields[1] + " : " + err2des.value(fields[1]);
+                        }
                     }
                 }
                 log.close();
@@ -247,39 +299,48 @@ bool LogParser::CheckErrors()
             else
             {
                 Log("Cann't open the log file: " + logstr);
-                emit sigFinished(PAR_FAIL, res);
-                return false;
+                res.items<<"00;;Cann't open the log file: " + logstr;
             }
             haveLogFile = true;
         }
         if(haveLogFile)
         {
-            Log("There are no any errors in: " +  m_LogDir.absolutePath());
-            emit sigFinished(PAR_SUCCESSFULE,res);
+            if(res.items.size() == 0)
+            {
+                Log("There are no any errors in: " +  logDir.absolutePath());
+                res.items<<"00;;There are no any errors in: " +  logDir.absolutePath();
+            }
+            res.code = Analyze_Res::PAR_SUCCESSFULE;
+            emit sigFinished(res);
         }
         else
         {
-            Log("There are no any log files in: " +  m_LogDir.absolutePath());
-            emit sigFinished(PAR_CANCEL,res);
+            Log("There are no any log files in: " +  logDir.absolutePath());
+            res.items<<"00;;There are no any log files in: " +  logDir.absolutePath();
+            res.code = Analyze_Res::PAR_CANCEL;
+            emit sigFinished(res);
         }
         return true;
     }
     else
     {
-        Log("The log directory is not existed: " + m_LogDir.absolutePath());
-        emit sigFinished(PAR_FAIL,res);
+        Log("The log directory is not existed: " + logDir.absolutePath());
+        res.items<<"00;;The log directory is not existed: " + logDir.absolutePath();
+        res.code = Analyze_Res::PAR_FAIL;
+        emit sigFinished(res);
         return false;
     }
 }
 
-void LogParser::parse()
+void LogParser::parse(QString path)
 {
-    if(m_LogDir.exists())
+    QDir logDir(path);
+    if(logDir.exists())
     {
-        foreach (QString logstr,m_LogDir.entryList(QStringList() <<"HISTOCOREPEARL_*_*.log"<<"HISTOCOREPRIMARIS_*_*.log"
+        foreach (QString logstr,logDir.entryList(QStringList() <<"HISTOCOREPEARL_*_*.log"<<"HISTOCOREPRIMARIS_*_*.log"
                                                    , QDir::NoFilter,QDir::Name))
         {
-            QFile log(m_LogDir.absolutePath() + "/" + logstr);
+            QFile log(logDir.absolutePath() + "/" + logstr);
             if(log.open(QIODevice::ReadOnly | QIODevice::Text))
             {
                 while (!log.atEnd()) {
@@ -292,13 +353,13 @@ void LogParser::parse()
                 log.close();
             }
         }
-        writeCSV();
+        writeCSV(path);
     }
 }
 
-void LogParser::writeCSV()
+void LogParser::writeCSV(QString path)
 {
-    QFile csv(m_LogDir.absolutePath() + "/time.csv" );
+    QFile csv(QDir(path).absolutePath() + "/time.csv" );
     if(csv.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
     {
         QString header("item,min,average,max,desc\n");
@@ -309,7 +370,9 @@ void LogParser::writeCSV()
         }
     }
     csv.close();
-    emit sigFinished(PAR_SUCCESSFULE, QStringList());
+    Analyze_Res res;
+    res.code = Analyze_Res::PAR_SUCCESSFULE;
+    emit sigFinished(res);
 }
 
 void LogParser::Log(QString log)

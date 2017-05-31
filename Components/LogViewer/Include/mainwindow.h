@@ -45,16 +45,24 @@ public slots:
     void SaveCurve();
     void ShowVersion();
     void DrawCurves(QModelIndex index);
+    void onClickTabeView(QModelIndex index);
     void AddLogLevels();
     void OnClickLogFilter(QModelIndex index);
     void OnChangeCurveSettings(QwtPlotItem *item, tCurveSettingData data, int index);
     void OnLegendChecked(QwtPlotItem *item, bool on, int index);
     void OnZoomed(QRectF point);
-    void OnFinishAnalyzingLog(PARSER_Result result, QStringList res);
+    void OnFinishAnalyzingLog(Analyze_Res result);
     void UpdateStatusbar(QModelIndex index);
+    void OnPositionItem(const QDateTime& dt, QString logDir);
+    void OnPositionTreeView(int row);
+private:
+    QStandardItem* findInTree(int value);
+    QDir getRecentDir();
+    void setRecentDir(QString path);
+    void resetSensorCurves();
 private:
     Ui::MainWindow *ui;
-    QDir m_LogDir;
+    QDir m_EventLogDir; // the dir for the event log showed now
     SensorDataItf m_sditf;
     QHash<QString, QwtPlotCurve*> m_curves;
     Picker* m_zoom;
@@ -64,6 +72,7 @@ private:
     DlgParserResult* m_dlgres;
     EventLogSortFilter* m_LogSortFilter;
     UserTableModel* m_model;
+    QString m_CurrentEventFileName;//
 };
 
 #endif // MAINWINDOW_H

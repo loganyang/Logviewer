@@ -18,10 +18,15 @@ bool UserTableModel::isInterest(QString line) const
     return GlobalDefines::Instance().interest(line);
 }
 
+bool UserTableModel::isStartBottleCheck(QString line)
+{
+    return line.contains("67174927"); // start bottle check
+}
+
 bool UserTableModel::isStartProgram(QString line)
 {
-     return line.contains("67174418") || //User start the program
-            line.contains("67174927"); // start bottle check
+     return line.contains("67174418");//User start the program
+
 }
 bool UserTableModel::isStartSelfttest(QString line)
 {
@@ -221,6 +226,14 @@ void UserTableModel::FilterEvent(QString EventLogs)
                 m_navigator.push_back(program_t(QString("%1##%2").arg(Name).arg(m_items.size() - 1),
                                    QList<step_t > ()));
             }
+            else if(isStartBottleCheck(ReadData)) // the first level
+            {
+                newStartProgram = false;
+                newStartStep = false;
+                QString Name = "Bottle check";
+                m_navigator.push_back(program_t(QString("%1##%2").arg(Name).arg(m_items.size() - 1),
+                                   QList<step_t > ()));
+            }
             else if(isStartSelfttest(ReadData)) //the first level
             {
                 newStartProgram = false;
@@ -276,6 +289,37 @@ void UserTableModel::FilterEvent(QString EventLogs)
             }
         }
     }
+}
+
+QModelIndex UserTableModel::IndexByDate(const QDateTime& dt)
+{
+    int start = 0;
+    int end = m_items.size() - 1;
+    int row = -1;
+    int mid;
+    QString str = dt.toString("yyyy-MM-dd hh:mm:ss.zzz");
+    while(start < end)
+    {
+        mid = start + (end - start) / 2;
+       if(str.compare(m_items[mid].time) > 0)
+       {
+           start = mid;
+       }
+       else if(str.compare(m_items[mid].time) < 0)
+       {
+           end = mid;
+       }
+       else
+       {
+           row = mid;
+           break;
+       }
+    }
+    if(row < 0)
+    {
+        row = end;
+    }
+    return index(row,0);
 }
 
 void UserTableModel::AnalyzeLog()

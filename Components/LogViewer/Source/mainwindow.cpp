@@ -115,6 +115,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     m_model(NULL),
     m_LogSortFilter(NULL),
+    m_CurrentEventFileName(""),
     ui(new Ui::MainWindow)
 {
 
@@ -122,7 +123,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     setAutoFillBackground( true );
     setWindowTitle("Himalaya Logviewer");
-
+    setWindowState(Qt::WindowMaximized);
     ui->centralWidget->setAttribute(Qt::WA_TranslucentBackground);
     ui->tabWidget->setTabOrder(ui->event,ui->sensor);
     ui->tabWidget->setAttribute(Qt::WA_TranslucentBackground);
@@ -135,6 +136,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->tableView->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
 
     connect(ui->tableView,SIGNAL(doubleClicked(QModelIndex)),this,SLOT(DrawCurves(QModelIndex)));
+    connect(ui->tableView,SIGNAL(clicked(QModelIndex)),this,SLOT(onClickTabeView(QModelIndex)));
     connect(ui->tableView,SIGNAL(clicked(QModelIndex)),this,SLOT(UpdateStatusbar(QModelIndex)));
 
     //init plot
@@ -187,6 +189,7 @@ MainWindow::MainWindow(QWidget *parent) :
      m_lpkg = new LPKGReader();
      m_lpkg->setVisible(false);
      m_dlgres = new DlgParserResult();
+     connect(m_dlgres,SIGNAL(positionAt(QDateTime, QString)),this,SLOT(OnPositionItem(QDateTime, QString)));
      m_dlgres->setVisible(false);
 
     statusBar()->setVisible(true);
@@ -222,8 +225,7 @@ void MainWindow::UpdateStatusbar(QModelIndex index)
         statusBar()->showMessage(QString("sum: %1h:%2m:%3s").arg(sum/3600).arg( (sum%3600)/60).arg((sum%3600)%60));
     }
 }
-
-quint32 MainWindow::loadLogs()
+QDir MainWindow::getRecentDir()
 {
     if(QFile::exists(".data"))
     {
@@ -235,33 +237,39 @@ quint32 MainWindow::loadLogs()
                 QString ReadData = tmpf.readLine();
                 if(ReadData.startsWith("LOG_PATH##"))
                 {
-                    m_LogDir = QFileInfo(ReadData.section("##",1)).absoluteDir();
-                    break;
+                    return QFileInfo(ReadData.section("##",1)).absoluteDir();
                 }
             }
             tmpf.close();
         }
 
     }
-    QString file = QFileDialog::getOpenFileName(this,"select file",m_LogDir.absolutePath(),"log(HISTOCORE*_*_*.log)");
+}
+void MainWindow::setRecentDir(QString path)
+{
+    QFile tmpf(".data");
+    if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
+    {
+        tmpf.write(QString("LOG_PATH##%1").arg(path).toUtf8());
+        tmpf.close();
+    }
+}
+
+quint32 MainWindow::loadLogs()
+{
+    QDir recentDir = getRecentDir();
+    QString file = QFileDialog::getOpenFileName(this,"select file",recentDir.absolutePath(),"log(HISTOCORE*_*_*.log)");
     if(file.isEmpty())
     {
         return 1;
     }
-    setWindowTitle("Himalaya Logviewer : " + file);
-    openEventLog(file);
-    m_LogDir = QFileInfo(file).absoluteDir();
 
-    QFile tmpf(".data");
-    if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
-    {
-        tmpf.write(QString("LOG_PATH##%1").arg(file).toUtf8());
-        tmpf.close();
-    }
+    openEventLog(file);
     return 0;
 }
 void MainWindow::openEventLog(QString eventfile)
 {
+    m_waitingBox->show();
     if(m_model == NULL)
     {
         m_model = new UserTableModel();
@@ -271,6 +279,8 @@ void MainWindow::openEventLog(QString eventfile)
         m_LogSortFilter = new EventLogSortFilter();
         connect(ui->treeView,SIGNAL(clicked(QModelIndex)), this, SLOT(OnClickLogFilter(QModelIndex)));
     }
+    setWindowTitle("Himalaya Logviewer : " + eventfile);
+    resetSensorCurves();
     m_model->LoadNewLogs(eventfile);
     m_LogSortFilter->setSourceModel(m_model);
     ui->tableView->setModel(m_LogSortFilter);
@@ -278,43 +288,30 @@ void MainWindow::openEventLog(QString eventfile)
     AddLogLevels();
     init();
     m_model->setView(ui->tableView);
+
+    m_EventLogDir = QFileInfo(eventfile).absoluteDir();
+    m_CurrentEventFileName = QFileInfo(eventfile).fileName();
+
+    setRecentDir(eventfile);
+    m_waitingBox->hide();
 }
 
 void MainWindow::AnalysizeLog()
 {
-    m_dlgres->clear();
-    if(QFile::exists(".data"))
+    QDir recentDir = getRecentDir();
+    if(m_dlgres->isVisible())
     {
-        QFile tmpf(".data");
-        if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
-        {
-            while (!tmpf.atEnd())
-            {
-                QString ReadData = tmpf.readLine();
-                if(ReadData.startsWith("LOG_PATH##"))
-                {
-                    m_LogDir = QFileInfo(ReadData.section("##",1)).absoluteDir();
-                    break;
-                }
-            }
-            tmpf.close();
-        }
-
+        m_dlgres->activateWindow();
+        return;
     }
 
-    QString dirstr = QFileDialog::getExistingDirectory(this,"select a directory",m_LogDir.absolutePath());
+    QString dirstr = QFileDialog::getExistingDirectory(this,"select a directory",recentDir.absolutePath());
     if(dirstr.isEmpty()) //user click "cancel"
         return;
     QDir dir(dirstr);
     if(dir.exists())
     {
-        m_LogDir = dir;
-        QFile tmpf(".data");
-        if(tmpf.open(QIODevice::ReadWrite | QIODevice::Text))
-        {
-            tmpf.write(QString("LOG_PATH##%1").arg(dirstr).toUtf8());
-            tmpf.close();
-        }
+        setRecentDir(dirstr);
         emit sigAnalysizeLog(dirstr);
         m_dlgres->setWindowTitle(dirstr);
     }
@@ -323,19 +320,16 @@ void MainWindow::AnalysizeLog()
         QMessageBox::information(ui->centralWidget,"Log Parser","The directory is not existed",QMessageBox::Ok );
     }
 }
-void MainWindow::OnFinishAnalyzingLog(PARSER_Result result, QStringList res)
+void MainWindow::OnFinishAnalyzingLog(Analyze_Res result)
 {
-    switch(result)
+    switch(result.code)
     {
-    case PAR_CANCEL:
+    case Analyze_Res::PAR_CANCEL:
         QMessageBox::information(ui->centralWidget,"Log Parser","There is no any log files in your directory!!",QMessageBox::Ok );
         break;
-    case PAR_SUCCESSFULE:
-    case PAR_FAIL:
-        foreach (QString err, res)
-        {
-            m_dlgres->addItem(err);
-        }
+    case Analyze_Res::PAR_SUCCESSFULE:
+    case Analyze_Res::PAR_FAIL:
+        m_dlgres->setResult(result);
         m_dlgres->show();
         break;
     default:
@@ -369,6 +363,20 @@ void MainWindow::init()
     ui->tableView->horizontalHeader()->setStretchLastSection(true);
 }
 
+void MainWindow::onClickTabeView(QModelIndex index)
+{
+    if(!index.isValid())
+        return;
+
+    QModelIndex dIndex = m_LogSortFilter->mapToSource(index);
+    OnPositionTreeView(dIndex.row());
+}
+void MainWindow::resetSensorCurves()
+{
+    ui->tabWidget->setCurrentIndex(0);
+    ui->qwtPlot->detachItems();
+    m_sditf.reset();
+}
 
 void MainWindow::DrawCurves(QModelIndex index)
 {
@@ -383,9 +391,10 @@ void MainWindow::DrawCurves(QModelIndex index)
     QModelIndex xi = model->index(index.row(),0,QModelIndex());
     QDateTime Datetime = QDateTime::fromString(model->data(xi).toString(),"yyyy-MM-dd hh:mm:ss.zzz");
 
-    if(!m_sditf.load(m_LogDir, Datetime))
+    if(!m_sditf.load(m_EventLogDir, Datetime))
     {
         m_waitingBox->hide();
+        m_sditf.reset();
         QMessageBox::information(this,"Info", "No sensor data for this event log", QMessageBox::Ok);
         return;
     }
@@ -408,11 +417,8 @@ void MainWindow::DrawCurves(QModelIndex index)
         Qt::darkCyan,
         Qt::magenta,
         Qt::darkMagenta,
-        Qt::yellow,
-        Qt::darkYellow,
         Qt::gray,
         Qt::darkGray,
-        Qt::lightGray
     };
     foreach (const QString &key, CurveNames)
     {
@@ -421,7 +427,7 @@ void MainWindow::DrawCurves(QModelIndex index)
             QwtPlotCurve* curve = new QwtPlotCurve(key);
             m_curves.insert(key,curve);
             curve->setRawSamples(time,data,size);
-            curve->setPen(QPen(colors[(colIndex++)%16],2));
+            curve->setPen(QPen(colors[(colIndex++)%13],2));
             curve->attach(ui->qwtPlot);
         }
     }
@@ -478,7 +484,7 @@ void MainWindow::AddLogLevels()
 
 
     ui->treeView->setFrameStyle( QTreeView::NoFrame );
-    ui->treeView->viewport()->setBackgroundRole(QPalette::Background);
+//    ui->treeView->viewport()->setBackgroundRole(QPalette::Background);
     ui->treeView->viewport()->setAutoFillBackground( false );
 
     ui->treeView->setRootIsDecorated( true );
@@ -490,6 +496,8 @@ void MainWindow::AddLogLevels()
 
     // add log filter
     ui->treeView->setItemDelegate( new QItemDelegate( ui->treeView ) );
+    ui->treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->treeView->setSelectionMode(QAbstractItemView::SingleSelection);
     QStandardItem *filter = new QStandardItem("Filter");
     filter->setEditable(false);
     QMap<QString, QStringList>& LogLevelType = GlobalDefines::Instance().GetLogFilter();
@@ -534,6 +542,98 @@ void MainWindow::AddLogLevels()
         model->appendRow(program);
     }
 }
+void MainWindow::OnPositionItem(const QDateTime& dt, QString logDir)
+{
+
+    QDir dir(logDir);
+    QStringList files = dir.entryList(QStringList()<<QString("HISTOCORE*_*_%1.log")
+                     .arg(dt.toString("yyyyMMdd")));
+    if(files.size() > 0)
+    {
+        QString tgtFileName = logDir + "/" + files[0];
+        if(m_CurrentEventFileName.isEmpty() || //never open a event log
+                tgtFileName.compare(m_EventLogDir.absolutePath() + "/" + m_CurrentEventFileName) != 0)
+        {
+            openEventLog(tgtFileName);
+        }
+    }
+
+    QModelIndex index = m_model->IndexByDate(dt);
+    ui->tableView->selectionModel()->clear();
+    if(index.isValid())
+    {
+        //position table view
+        QModelIndex ind = m_LogSortFilter->mapFromSource(index);
+        if(ind.isValid())
+        {
+            ui->tableView->selectionModel()->select(ind,QItemSelectionModel::Select | QItemSelectionModel::Rows);
+            ui->tableView->scrollTo(ind,QAbstractItemView::PositionAtTop);
+        }
+
+        //position tree view
+        OnPositionTreeView(index.row());
+    }
+}
+
+// value is the row that the tree item mapped in the tabe model
+QStandardItem* MainWindow::findInTree(int value)
+{
+    const QStandardItemModel *model =
+        qobject_cast<QStandardItemModel *>( ui->treeView->model() );
+
+    bool ok = false;
+    QList<QStandardItem*> items;
+    QStandardItem* itemLev1;
+    QStandardItem* itemLev2;
+    for(int rowLev1 = 1; rowLev1 < model->rowCount(); rowLev1++)
+    {
+        itemLev1 = model->item(rowLev1);
+        if(itemLev1)
+        {
+            items.append(itemLev1);
+            for(int rowLev2 = 0; rowLev2 < itemLev1->rowCount(); rowLev2++)
+            {
+                itemLev2 = itemLev1->child(rowLev2);
+                if(itemLev2)
+                {
+                    items.append(itemLev2);
+                    for(int rowLev3 = 0; rowLev3 < itemLev2->rowCount(); rowLev3++)
+                    {
+                        items.append(itemLev2->child(rowLev3));
+                    }
+                }
+            }
+        }
+    } // end for rowLev1
+    if(items.size() <= 0 || value < items[0]->data(Qt::DecorationRole).toUInt(&ok))
+    {
+        return NULL;
+    }
+    for (int it = 0; it < items.size(); it++)
+    {
+        if(items[it])
+        {
+           int va = items[it]->data(Qt::DecorationRole).toUInt(&ok);
+           if(value == va) return items[it];
+           else if(value < va && it > 0) return items[it - 1];
+           else if(value > va && it == (items.size() - 1)) return items[it];
+        }
+    }
+
+}
+
+void MainWindow::OnPositionTreeView(int row)
+{
+    ui->treeView->selectionModel()->clear();
+    QStandardItem* selected = findInTree(row);
+    if(selected)
+    {
+        ui->treeView->selectionModel()->select(selected->index(),QItemSelectionModel::Select);
+        //ui->treeView->expand(selected->index());
+        //ui->treeView->setCurrentIndex(selected->index());
+        ui->treeView->scrollTo(selected->index());
+    }
+}
 
 void MainWindow::OnClickLogFilter(QModelIndex index)
 {
@@ -573,6 +673,7 @@ void MainWindow::OnClickLogFilter(QModelIndex index)
     {
         bool ok = false;
         quint32 row = model->data(index,Qt::DecorationRole).toUInt(&ok);
+        ui->tableView->selectionModel()->clear();
         if(ok)
         {
             QModelIndex index = m_LogSortFilter->mapFromSource(m_model->index(row,0,QModelIndex()));

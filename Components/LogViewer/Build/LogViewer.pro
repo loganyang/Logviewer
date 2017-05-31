@@ -9,6 +9,13 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
+#add debug info in release version
+#QMAKE_CXXFLAGS_RELEASE += -g
+#QMAKE_CFLAGS_RELEASE += -g
+#QMAKE_LFLAGS_RELEASE = -mthreads
+#end
+
+
 TARGET = LogViewer
 TEMPLATE = app
 QMAKE_CXXFLAGS += -Wall -std=c++0x

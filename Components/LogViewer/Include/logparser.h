@@ -8,11 +8,19 @@
 #include <QDateTime>
 #include <QTextStream>
 #include <QWidget>
-enum PARSER_Result
+#include <QTableWidgetItem>
+
+struct Analyze_Res
 {
-    PAR_CANCEL,
-    PAR_SUCCESSFULE,
-    PAR_FAIL
+    enum Res_Code
+    {
+        PAR_CANCEL,
+        PAR_SUCCESSFULE,
+        PAR_FAIL
+    };
+    Res_Code code;
+    QStringList items;
+    QString logdir;
 };
 
 struct ControlKey
@@ -48,14 +56,19 @@ class DlgParserResult : public QWidget
 public:
     explicit DlgParserResult(QWidget *parent = 0);
     ~DlgParserResult();
-    void addItem(QString item);
-    void clear();
+    void setResult(Analyze_Res res){ result = res;}
+    void show();
 
 public slots:
     void onOk(bool ok);
+    void onDoubleClicked(QTableWidgetItem* item);
+
+signals:
+    void positionAt(QDateTime dt, QString dir);
 
 private:
     Ui::DlgParserResult *ui;
+    Analyze_Res result;
 };
 
 
@@ -67,19 +80,18 @@ public:
     ~LogParser();
 
 signals:
-    void sigFinished(PARSER_Result result, QStringList res);
+    void sigFinished(Analyze_Res result);
 
 public slots:
     void start(QString path);
-    void parse();
-    bool CheckErrors();
+    void parse(QString path);
+    bool CheckErrors(QString path);
 
 private:
-    void writeCSV();
+    void writeCSV(QString path);
     void Log(QString log);
 
 private:
-    QDir m_LogDir;
     QString m_ResultFile;
     QList<ControlKey> m_items;
     QThread* m_thread;

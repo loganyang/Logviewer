@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
     QApplication a(argc, argv);
     MainWindow w;
 
-    qRegisterMetaType<PARSER_Result>("PARSER_Result");
+    qRegisterMetaType<Analyze_Res>("Analyze_Res");
     qRegisterMetaType<tCurveSettingData>("tCurveSettingData");
     QThread* thread = new QThread();
     LogParser* parser = new LogParser;
@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     thread->start(QThread::NormalPriority);
 
     QObject::connect(&w, SIGNAL(sigAnalysizeLog(QString)),parser,SLOT(start(QString)));
-    QObject::connect(parser,SIGNAL(sigFinished(PARSER_Result, QStringList)), &w, SLOT(OnFinishAnalyzingLog(PARSER_Result, QStringList)));
+    QObject::connect(parser,SIGNAL(sigFinished(Analyze_Res)), &w, SLOT(OnFinishAnalyzingLog(Analyze_Res)));
 
     w.init();
     w.show();
