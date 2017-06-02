@@ -20,7 +20,6 @@ int main(int argc, char *argv[])
 
     QObject::connect(&w, SIGNAL(sigAnalysizeLog(QString)),parser,SLOT(start(QString)));
     QObject::connect(parser,SIGNAL(sigFinished(Analyze_Res)), &w, SLOT(OnFinishAnalyzingLog(Analyze_Res)));
-
     w.init();
     w.show();
 

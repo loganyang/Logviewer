@@ -21,6 +21,7 @@ namespace Ui {
 class MainWindow;
 }
 
+class FindDlg;
 class Picker;
 const QString VERSION_LOGVIEWER = "1.0 HIM_0.022\n1.1 Integrated with LPKG reader\n1.2 Added scenario filters \n1.3 Checked log errors";
 class MainWindow : public QMainWindow
@@ -43,6 +44,7 @@ public slots:
     void AnalysizeLog();
     void OpenLPKG();
     void SaveCurve();
+    void Find();
     void ShowVersion();
     void DrawCurves(QModelIndex index);
     void onClickTabeView(QModelIndex index);
@@ -53,8 +55,10 @@ public slots:
     void OnZoomed(QRectF point);
     void OnFinishAnalyzingLog(Analyze_Res result);
     void UpdateStatusbar(QModelIndex index);
-    void OnPositionItem(const QDateTime& dt, QString logDir);
+    void OnPositionItem(const QString key, QDateTime dt, QString logDir);
+    void OnPositionItem(QModelIndex index);
     void OnPositionTreeView(int row);
+    QAbstractTableModel* getTabeModel(){return m_model;}
 private:
     QStandardItem* findInTree(int value);
     QDir getRecentDir();
@@ -69,6 +73,7 @@ private:
     QHash<QString, Qt::CheckState> m_logFilter;
     QMessageBox* m_waitingBox;
     LPKGReader* m_lpkg;
+    FindDlg* m_FindDlg;
     DlgParserResult* m_dlgres;
     EventLogSortFilter* m_LogSortFilter;
     UserTableModel* m_model;

@@ -48,7 +48,8 @@ SOURCES +=\
     ../Source/logparser.cpp \
     ../Source/lpkgreader.cpp \
     ../Source/dlgcurvesettings.cpp \
-    ../Source/eventlogsortfilter.cpp
+    ../Source/eventlogsortfilter.cpp \
+    ../Source/finddlg.cpp
 
 
 HEADERS  += \
@@ -61,14 +62,16 @@ HEADERS  += \
     ../Include/logparser.h \
     ../Include/lpkgreader.h \
     ../Include/dlgcurvesettings.h \
-    ../Include/eventlogsortfilter.h
+    ../Include/eventlogsortfilter.h \
+    ../Include/finddlg.h
 
 
 FORMS    += \
     ../Forms/mainwindow.ui \
     ../Forms/lpkgreader.ui \
     ../Forms/dlgcurvesettings.ui \
-    ../Forms/dlgParserResult.ui
+    ../Forms/dlgParserResult.ui \
+    ../Forms/finddlg.ui
 
 
 
@@ -86,3 +89,6 @@ for(TheComponent, PLATFORM_COMPONENTS) {
 }
 
 INCLUDEPATH += C:\Qwt-6.1.2\include
+
+RESOURCES += \
+    ../Resource/logviewer.qrc

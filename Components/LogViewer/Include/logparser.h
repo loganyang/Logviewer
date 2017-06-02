@@ -20,6 +20,7 @@ struct Analyze_Res
     };
     Res_Code code;
     QStringList items;
+    QStringList condsMached; // datetime.*errorid.*stringid
     QString logdir;
 };
 
@@ -64,7 +65,7 @@ public slots:
     void onDoubleClicked(QTableWidgetItem* item);
 
 signals:
-    void positionAt(QDateTime dt, QString dir);
+    void positionAt(QString key, QDateTime dt, QString dir);
 
 private:
     Ui::DlgParserResult *ui;

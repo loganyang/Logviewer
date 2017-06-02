@@ -14,11 +14,17 @@ typedef QPair<QString,QStringList> step_t;
 typedef QPair<QString, QList<step_t > > program_t;
 struct Event
 {
-    Event(QString t, QString i, QString ty, QString desc):time(t),id(i),type(ty),description(desc){}
+    Event(QString t, QString i, QString ty, QString strid, QString desc):
+        time(t),id(i),type(ty),stringid(strid),description(desc){}
     QString time;
     QString id;
     QString type;
+    QString stringid;
     QString description;
+    bool isMached(QRegExp reg)
+    {
+        return 0<= reg.indexIn(QString("%1;%2;%3;%4;%5").arg(time).arg(id).arg(type).arg(stringid).arg(description));
+    }
 };
 
 class UserTableModel : public QAbstractTableModel
@@ -57,7 +63,7 @@ public slots:
     void FilterEvent(QString EventLogs);
     void DrawData(QString EventLogs);
     void AnalyzeLog();
-    QModelIndex IndexByDate(const QDateTime& dt);
+    QModelIndex IndexByDate(const QDateTime& dt, QString key);
 private:
     void ResetLogs();
 

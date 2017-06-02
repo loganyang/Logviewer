@@ -158,8 +158,16 @@ void DlgParserResult::onDoubleClicked(QTableWidgetItem *item)
     {
         dateitem = ui->tbRes->item(item->row(),0);
     }
-    QDateTime dt = QDateTime::fromString(dateitem->data(Qt::DisplayRole).toString(),"yyyy-MM-dd hh:mm:ss.zzz");
-    emit positionAt(dt, result.logdir);
+    QString key = dateitem->data(Qt::DisplayRole).toString();
+    QDateTime dt = QDateTime::fromString(key,"yyyy-MM-dd hh:mm:ss.zzz");
+
+    int in = result.items.indexOf(QRegExp(key +".*"));
+
+    if(in >= 0 && in < result.condsMached.size())
+    {
+        key = result.condsMached[in];
+    }
+    emit positionAt(key, dt, result.logdir);
 }
 
 LogParser::LogParser() : QObject(0)
@@ -242,6 +250,7 @@ bool LogParser::CheckErrors(QString path)
     Analyze_Res res;
     res.logdir = path;
     QHash<QString,QString> err2des;
+    QHash<QString,QString> err2machedCons;
     if(ErrorListFile.exists() && ErrorListFile.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Log("Open and Read the error list: " + CfgErrorName);
@@ -250,12 +259,15 @@ bool LogParser::CheckErrors(QString path)
             if(!ReadData.trimmed().isEmpty())
             {
                 QStringList fs = ReadData.split(",");
-                regstr += ("|" + fs[0]);
-                if(fs.size() > 2) //Service string
+                QString reg = fs[0];
+                if(fs.size() > 2) //string id
                 {
                    fs[2].chop(1);// remove \n
-                   regstr += (".*" + fs[2]);
+                   reg +=(".*" + fs[2]);
+
                 }
+                regstr += "|" + reg;
+                err2machedCons.insert(fs[0],reg);
                 err2des.insert( fs[0], fs[1]);
             }
         }
@@ -291,6 +303,7 @@ bool LogParser::CheckErrors(QString path)
                         if(fields.size() > 1)
                         {
                             res.items<<fields[0] + ";;" + fields[1] + " : " + err2des.value(fields[1]);
+                            res.condsMached<<fields[0] + ".*" + err2machedCons.value(fields[1]);
                         }
                     }
                 }

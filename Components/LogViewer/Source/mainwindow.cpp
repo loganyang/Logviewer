@@ -29,7 +29,7 @@
 #include "qwt_plot_renderer.h"
 #include "qstatusbar.h"
 #include "QListWidget"
-
+#include "../Include/finddlg.h"
 class Picker : public QwtPlotZoomer
 {
   public:
@@ -121,6 +121,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //init tableview
     ui->setupUi(this);
+    QFile styleSheet(":/qss/logviewer.qss");
+    if (styleSheet.open(QIODevice::ReadOnly))
+    {
+        setStyleSheet(styleSheet.readAll());
+    }
+
     setAutoFillBackground( true );
     setWindowTitle("Himalaya Logviewer");
     setWindowState(Qt::WindowMaximized);
@@ -128,6 +134,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->tabWidget->setTabOrder(ui->event,ui->sensor);
     ui->tabWidget->setAttribute(Qt::WA_TranslucentBackground);
     ui->tableView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+   // ui->tableView->setStyleSheet("QTableView{selection-background-color:blue;}");
+    //setStyleSheet("*[flat=false]");
     ui->tableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     ui->treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     ui->treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -138,7 +146,6 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->tableView,SIGNAL(doubleClicked(QModelIndex)),this,SLOT(DrawCurves(QModelIndex)));
     connect(ui->tableView,SIGNAL(clicked(QModelIndex)),this,SLOT(onClickTabeView(QModelIndex)));
     connect(ui->tableView,SIGNAL(clicked(QModelIndex)),this,SLOT(UpdateStatusbar(QModelIndex)));
-
     //init plot
     ui->qwtPlot->setAutoReplot(false);
     DateScaleDraw* xAxisScalreDraw = new DateScaleDraw();
@@ -168,10 +175,14 @@ MainWindow::MainWindow(QWidget *parent) :
      QAction *SaveCurves = new QAction("&Save Curves",this);
      connect(SaveCurves,SIGNAL(triggered()),this,SLOT(SaveCurve()));
 
+     QAction *Search = new QAction("&Find",this);
+     connect(Search,SIGNAL(triggered()),this,SLOT(Find()));
+
      QMenu *File = menuBar()->addMenu("&File");
      File->addAction(ccfg);
 
      QMenu *Tool = menuBar()->addMenu("&Tool");
+     Tool->addAction(Search);
      Tool->addAction(SaveCurves);
      Tool->addAction(Anls);
      Tool->addAction(lpkg);
@@ -186,12 +197,14 @@ MainWindow::MainWindow(QWidget *parent) :
      m_waitingBox->setStandardButtons(QMessageBox::NoButton);
      m_waitingBox->setDefaultButton(QMessageBox::NoButton);
 
-     m_lpkg = new LPKGReader();
+     m_lpkg = new LPKGReader(this);
      m_lpkg->setVisible(false);
      m_dlgres = new DlgParserResult();
-     connect(m_dlgres,SIGNAL(positionAt(QDateTime, QString)),this,SLOT(OnPositionItem(QDateTime, QString)));
+     connect(m_dlgres,SIGNAL(positionAt(QString, QDateTime, QString)),this,SLOT(OnPositionItem(QString, QDateTime, QString)));
      m_dlgres->setVisible(false);
 
+     m_FindDlg = new FindDlg(this);
+     m_FindDlg->setVisible(false);
     statusBar()->setVisible(true);
     statusBar()->setSizeGripEnabled(false);
     statusBar()->showMessage("Ready");
@@ -282,6 +295,7 @@ void MainWindow::openEventLog(QString eventfile)
     setWindowTitle("Himalaya Logviewer : " + eventfile);
     resetSensorCurves();
     m_model->LoadNewLogs(eventfile);
+    m_LogSortFilter->applyFilter(QRegExp(".*"));
     m_LogSortFilter->setSourceModel(m_model);
     ui->tableView->setModel(m_LogSortFilter);
     ui->tableView->setWordWrap(true);
@@ -345,6 +359,10 @@ void MainWindow::SaveCurve()
 {
     QwtPlotRenderer renderer;
      renderer.exportTo( ui->qwtPlot, "Curves.png" );
+}
+void MainWindow::Find()
+{
+    m_FindDlg->show();
 }
 
 void MainWindow::ShowVersion()
@@ -542,36 +560,49 @@ void MainWindow::AddLogLevels()
         model->appendRow(program);
     }
 }
-void MainWindow::OnPositionItem(const QDateTime& dt, QString logDir)
+void MainWindow::OnPositionItem(QModelIndex index)
+{
+    ui->tableView->selectionModel()->clear();
+    if(!index.isValid())
+        return;
+    QModelIndex ind = m_LogSortFilter->mapFromSource(index);
+    if(ui->tableView->isRowHidden(ind.row()))
+    {
+        return;
+    }
+    if(ind.isValid())
+    {
+        ui->tableView->selectionModel()->select(ind,QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        ui->tableView->scrollTo(ind,QAbstractItemView::PositionAtTop);
+    }
+    OnPositionTreeView(index.row());
+}
+
+void MainWindow::OnPositionItem(const QString key, QDateTime dt, QString logDir)
 {
 
-    QDir dir(logDir);
-    QStringList files = dir.entryList(QStringList()<<QString("HISTOCORE*_*_%1.log")
-                     .arg(dt.toString("yyyyMMdd")));
-    if(files.size() > 0)
+    if(!logDir.isEmpty()) // log dir has been changed
     {
-        QString tgtFileName = logDir + "/" + files[0];
-        if(m_CurrentEventFileName.isEmpty() || //never open a event log
-                tgtFileName.compare(m_EventLogDir.absolutePath() + "/" + m_CurrentEventFileName) != 0)
+        QDir dir(logDir);
+        QStringList files = dir.entryList(QStringList()<<QString("HISTOCORE*_*_%1.log")
+                         .arg(dt.toString("yyyyMMdd")));
+        if(files.size() > 0)
         {
-            openEventLog(tgtFileName);
+            QString tgtFileName = logDir + "/" + files[0];
+            if(m_CurrentEventFileName.isEmpty() || //never open a event log
+                    tgtFileName.compare(m_EventLogDir.absolutePath() + "/" + m_CurrentEventFileName) != 0)
+            {
+                openEventLog(tgtFileName);
+            }
         }
     }
 
-    QModelIndex index = m_model->IndexByDate(dt);
+    QModelIndex index = m_model->IndexByDate(dt, key);
     ui->tableView->selectionModel()->clear();
     if(index.isValid())
     {
         //position table view
-        QModelIndex ind = m_LogSortFilter->mapFromSource(index);
-        if(ind.isValid())
-        {
-            ui->tableView->selectionModel()->select(ind,QItemSelectionModel::Select | QItemSelectionModel::Rows);
-            ui->tableView->scrollTo(ind,QAbstractItemView::PositionAtTop);
-        }
-
-        //position tree view
-        OnPositionTreeView(index.row());
+        OnPositionItem(index);
     }
 }
 
@@ -655,12 +686,13 @@ void MainWindow::OnClickLogFilter(QModelIndex index)
             }
             QHashIterator<QString, Qt::CheckState> it(m_logFilter);
             QStringList filterValues = QStringList();
+            filterValues <<"NULL=NotMatchAnyOne";
             while(it.hasNext())
             {
                 it.next();
                 if(it.value() == Qt::Checked)
                 {
-                    filterValues += GlobalDefines::Instance().getFilterValue(it.key());
+                    filterValues << GlobalDefines::Instance().getFilterValue(it.key());
                 }
             }
             if(m_LogSortFilter)

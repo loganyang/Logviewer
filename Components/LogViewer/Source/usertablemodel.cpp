@@ -3,6 +3,7 @@
 #include <QModelIndex>
 #include "QRegularExpression"
 #include "../Include/globaldefines.h"
+#include "QToolTip"
 UserTableModel::UserTableModel(QObject *parent) :
     QAbstractTableModel(parent)
 {
@@ -105,17 +106,26 @@ QVariant UserTableModel::headerData(int section, Qt::Orientation orientation, in
 
 QVariant UserTableModel::data(const QModelIndex &index, int role) const
 {
-    if(!index.isValid() || (role != Qt::DisplayRole && role != Qt::EditRole))
+    if(!index.isValid() || (role != Qt::DisplayRole && role != Qt::EditRole && role != Qt::ToolTipRole))
+    {
+        return QVariant();
+    }
+    if(index.row() >= m_items.count())
     {
         return QVariant();
     }
     const Event& ev = m_items[index.row()];
-    if(index.row() >= m_items.count() ||
-            (m_TypeFilter.contains(ev.type) && m_TypeFilter.value(ev.type)))
+    if(m_TypeFilter.contains(ev.type) && m_TypeFilter.value(ev.type))
     {
         return QVariant();
     }
 
+    if(role == Qt::ToolTipRole)
+    {
+        if(index.column() == 4)
+            return ev.description;
+        return QVariant();
+    }
     if(index.column() == 0)
     {
         return ev.time;
@@ -153,7 +163,7 @@ QVariant UserTableModel::data(const QModelIndex &index, int role) const
 
         }
     }
-    else if(index.column() == 2)
+    else if( index.column() == 2)
     {
         return ev.id;
     }
@@ -216,7 +226,7 @@ void UserTableModel::FilterEvent(QString EventLogs)
             {
                 if(fields.size() >= 5)
                 {
-                    m_items.push_back(Event(fields[0],fields[1],fields[2],fields[4]));
+                    m_items.push_back(Event(fields[0],fields[1],fields[2],fields[3],fields[4]));
                 }
             }
             if(isStartProgram(ReadData)) // the first level
@@ -291,7 +301,7 @@ void UserTableModel::FilterEvent(QString EventLogs)
     }
 }
 
-QModelIndex UserTableModel::IndexByDate(const QDateTime& dt)
+QModelIndex UserTableModel::IndexByDate(const QDateTime& dt, QString key)
 {
     int start = 0;
     int end = m_items.size() - 1;
@@ -314,6 +324,34 @@ QModelIndex UserTableModel::IndexByDate(const QDateTime& dt)
            row = mid;
            break;
        }
+    }
+    bool mached = false;
+    int in = row;
+    while(!mached && (in < m_items.size()) && (str.compare(m_items[in].time) == 0))
+    {
+        if(m_items[in].isMached(QRegExp(key)))
+        {
+            mached = true;
+            break;
+        }
+        in++;
+    }
+    if(!mached)
+    {
+        in = row-1;
+        while(!mached && in >=0 && str.compare(m_items[in].time) == 0)
+        {
+            if(m_items[in].isMached(QRegExp(key)))
+            {
+                mached = true;
+                break;
+            }
+            in--;
+        }
+    }
+    if(mached)
+    {
+        row =  in;
     }
     if(row < 0)
     {
