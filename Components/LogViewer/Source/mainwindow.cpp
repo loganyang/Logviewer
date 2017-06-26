@@ -197,7 +197,7 @@ MainWindow::MainWindow(QWidget *parent) :
      m_waitingBox->setStandardButtons(QMessageBox::NoButton);
      m_waitingBox->setDefaultButton(QMessageBox::NoButton);
 
-     m_lpkg = new LPKGReader(this);
+     m_lpkg = new LPKGReader();
      m_lpkg->setVisible(false);
      m_dlgres = new DlgParserResult();
      connect(m_dlgres,SIGNAL(positionAt(QString, QDateTime, QString)),this,SLOT(OnPositionItem(QString, QDateTime, QString)));
@@ -352,6 +352,7 @@ void MainWindow::OnFinishAnalyzingLog(Analyze_Res result)
 }
 void MainWindow::OpenLPKG()
 {
+    m_lpkg->Reset();
     m_lpkg->show();
 }
 

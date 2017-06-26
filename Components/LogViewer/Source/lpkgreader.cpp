@@ -21,6 +21,10 @@ LPKGReader::~LPKGReader()
     delete ui;
 }
 
+void LPKGReader::Reset()
+{
+    ui->filelistWidget->clear();
+}
 
 /****************************************************************************/
 /**

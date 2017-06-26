@@ -14,6 +14,7 @@ class LPKGReader : public QWidget
 public:
     explicit LPKGReader(QWidget *parent = 0);
     ~LPKGReader();
+    void Reset();
 public slots:
     void ReadPackage();
     void UnpackTheFiles();
