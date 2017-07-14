@@ -30,6 +30,8 @@
 #include "qstatusbar.h"
 #include "QListWidget"
 #include "../Include/finddlg.h"
+#include "QScrollBar"
+#include "QPixmap"
 class Picker : public QwtPlotZoomer
 {
   public:
@@ -115,6 +117,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     m_model(NULL),
     m_LogSortFilter(NULL),
+    m_ManualWgt(NULL),
     m_CurrentEventFileName(""),
     ui(new Ui::MainWindow)
 {
@@ -165,18 +168,22 @@ MainWindow::MainWindow(QWidget *parent) :
     //init menu
      QAction *ccfg = new QAction("&Open log",this);
      connect(ccfg,SIGNAL(triggered()),this,SLOT(loadLogs()));
+     ccfg->setShortcut(tr("Ctrl+O"));
 
      QAction *Anls = new QAction("&Analyse log",this);
      connect(Anls,SIGNAL(triggered()),this,SLOT(AnalysizeLog()));
+     Anls->setShortcut(tr("Ctrl+A"));
 
-     QAction *lpkg = new QAction("&Unzip LPKG",this);
+     QAction *lpkg = new QAction(QIcon(":/img/lpkg.svg"),"&Unzip LPKG",this);
      connect(lpkg,SIGNAL(triggered()),this,SLOT(OpenLPKG()));
+     lpkg->setShortcut(tr("Ctrl+U"));
 
      QAction *SaveCurves = new QAction("&Save Curves",this);
      connect(SaveCurves,SIGNAL(triggered()),this,SLOT(SaveCurve()));
 
-     QAction *Search = new QAction("&Find",this);
+     QAction *Search = new QAction(QIcon(":/img/find.svg"),"&Find",this);
      connect(Search,SIGNAL(triggered()),this,SLOT(Find()));
+     Search->setShortcut(tr("Ctrl+F"));
 
      QMenu *File = menuBar()->addMenu("&File");
      File->addAction(ccfg);
@@ -191,6 +198,10 @@ MainWindow::MainWindow(QWidget *parent) :
      QAction *version = new QAction("&Version",this);
      About->addAction(version);
      connect(version,SIGNAL(triggered()),this,SLOT(ShowVersion()));
+
+     QAction *help = new QAction("&Help",this);
+     About->addAction(help);
+     connect(help,SIGNAL(triggered()),this,SLOT(ShowManual()));
 
      m_waitingBox = new QMessageBox(QMessageBox::Information,"Info", "please waiting",
                       QMessageBox::NoButton, ui->tableView, Qt::Popup);
@@ -214,6 +225,8 @@ MainWindow::~MainWindow()
 {
     delete m_lpkg;
     delete m_dlgres;
+    delete m_ManualLabel;
+    delete m_ManualWgt;
     delete ui;
 }
 
@@ -364,6 +377,61 @@ void MainWindow::SaveCurve()
 void MainWindow::Find()
 {
     m_FindDlg->show();
+}
+
+void MainWindow::setManualPage(int page)
+{
+    if(m_CachedImageManual.contains(page))
+    {
+        m_ManualLabel->setPixmap(QPixmap::fromImage(m_CachedImageManual.value(page)));
+    }
+}
+
+void MainWindow::ShowManual()
+{
+    if(m_ManualWgt)
+    {
+        m_ManualWgt->setVisible(true);
+        m_ManualWgt->activateWindow();
+        return;
+    }
+    if(true)
+    {
+        QString name = QCoreApplication::applicationDirPath() + "/Manual.pdf";
+        Poppler::Document* doc = Poppler::Document::load(name);
+        if(doc && !doc->isLocked())
+        {
+           int numPage = doc->numPages();
+           m_CachedImageManual.clear();
+           for(int i = 0; i < numPage; i++)
+           {
+               Poppler::Page* pdfPage = doc->page(i);
+               if(pdfPage != 0)
+               {
+                   QImage image = pdfPage->renderToImage();
+                   m_CachedImageManual.insert(i,image);
+                   delete pdfPage;
+               }
+           }
+           delete doc;
+           if(! m_CachedImageManual.isEmpty())
+           {
+                m_ManualWgt = new QWidget();
+                m_ManualWgt->setWindowTitle("Help");
+                m_ManualWgt->setWindowFlags(Qt::Window | Qt::WindowCloseButtonHint);
+                QScrollBar* scrollbar = new QScrollBar(Qt::Vertical,m_ManualWgt);
+                scrollbar->setRange(0,numPage);
+                m_ManualLabel = new QLabel(m_ManualWgt);
+                QHBoxLayout *layout = new QHBoxLayout(m_ManualWgt);
+                layout->addWidget(m_ManualLabel);
+                layout->addWidget(scrollbar);
+                m_ManualWgt->setLayout(layout);
+                setManualPage(0);
+                connect(scrollbar, SIGNAL(valueChanged(int)), this, SLOT(setManualPage(int)));
+                m_ManualWgt->setVisible(true);
+           }
+        }
+    }
 }
 
 void MainWindow::ShowVersion()

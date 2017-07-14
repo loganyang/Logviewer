@@ -24,9 +24,11 @@ CONFIG += debug_and_release
 CONFIG(debug, debug|release){
         CONFIG_SUFFIX = dbg
         LIBS += -L"C:\Qwt-6.1.2\Lib" -lqwtd
+        LIBS += -L"..\libs\poppler-0.39.0-win32" -llibpoppler-qt5
 } else{
     CONFIG_SUFFIX = rel
     LIBS += -L"C:\Qwt-6.1.2\Lib" -lqwt
+    LIBS += -L"..\libs\poppler-0.39.0-win32" -llibpoppler-qt5
     DEFINES += QT_NO_DEBUG \
                QT_NO_DEBUG_OUTPUT \
                            DBT_TRACE_DISCARD \
@@ -89,6 +91,8 @@ for(TheComponent, PLATFORM_COMPONENTS) {
 }
 
 INCLUDEPATH += C:\Qwt-6.1.2\include
+INCLUDEPATH += ..\libs\poppler-0.39.0-win32\src
 
 RESOURCES += \
-    ../Resource/logviewer.qrc
+    ../Resource/logviewer.qrc \
+    ../imgs/images.qrc

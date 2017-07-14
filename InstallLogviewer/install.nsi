@@ -44,6 +44,8 @@ Section "Himalaya Logviewer (required)"
   File *
   SetOutPath $INSTDIR\platforms
   File platforms\*
+  SetOutPath $INSTDIR\iconengines
+  File iconengines\*
   CreateShortCut "$SMPROGRAMS\HimalayaLogViewer.lnk" "$INSTDIR\LogViewer.exe"
 SectionEnd
 

@@ -12,6 +12,8 @@ LPKGReader::LPKGReader(QWidget *parent) :
     ui(new Ui::LPKGReader)
 {
     ui->setupUi(this);
+    setWindowIcon(QIcon(":/img/lpkg.svg"));
+    setWindowTitle("LPKG Reader");
     connect(ui->readPackage,SIGNAL(pressed()), this, SLOT(ReadPackage()));
     connect(ui->generateFile,SIGNAL(pressed()), this, SLOT(UnpackTheFiles()));
 }

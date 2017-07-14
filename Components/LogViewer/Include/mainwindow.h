@@ -17,13 +17,21 @@
 #include "../Include/legend.h"
 #include "../Include/eventlogsortfilter.h"
 #include "../include/usertablemodel.h"
+#include <poppler-qt5.h>
+#include "QLabel"
 namespace Ui {
 class MainWindow;
 }
 
 class FindDlg;
 class Picker;
-const QString VERSION_LOGVIEWER = "1.0 HIM_0.022\n1.1 Integrated with LPKG reader\n1.2 Added scenario filters \n1.3 Checked log errors";
+const QString VERSION_LOGVIEWER = "1.0  HIM_0.022\n \
+1.1 Integrated with LPKG reader\n \
+1.2 Added scenario filters \n \
+1.3 Checked log errors \n \
+1.4 2017-07-12 New functions: find; error position; online help. \n";
+
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -46,6 +54,8 @@ public slots:
     void SaveCurve();
     void Find();
     void ShowVersion();
+    void ShowManual();
+    void setManualPage(int page);
     void DrawCurves(QModelIndex index);
     void onClickTabeView(QModelIndex index);
     void AddLogLevels();
@@ -78,6 +88,9 @@ private:
     EventLogSortFilter* m_LogSortFilter;
     UserTableModel* m_model;
     QString m_CurrentEventFileName;//
+    QWidget* m_ManualWgt;
+    QLabel* m_ManualLabel;
+    QMap<int, QImage> m_CachedImageManual;
 };
 
 #endif // MAINWINDOW_H
