@@ -1,0 +1,4 @@
+selection-background-color: rgb(188, 221, 255);
+QPushButton{border-style:none;padding:10px;border-radius:5px;color:#34495E;background:#FFFFFF;}
+QPushButton:hover{color:#4E6D8C;background:#F0F0F0;}
+QPushButton:pressed{color:#2D3E50;background:#B8C6D1;}

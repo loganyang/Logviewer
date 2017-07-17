@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/img">
+        <file>find.svg</file>
+        <file>lpkg.svg</file>
+        <file>Manual.pdf</file>
+    </qresource>
+</RCC>
