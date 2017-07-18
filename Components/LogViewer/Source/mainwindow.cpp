@@ -223,10 +223,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
+
     delete m_lpkg;
     delete m_dlgres;
-    delete m_ManualLabel;
-    delete m_ManualWgt;
     delete ui;
 }
 
@@ -270,6 +269,7 @@ QDir MainWindow::getRecentDir()
         }
 
     }
+    return QDir::current();
 }
 void MainWindow::setRecentDir(QString path)
 {
@@ -287,7 +287,7 @@ quint32 MainWindow::loadLogs()
     QString file = QFileDialog::getOpenFileName(this,"select file",recentDir.absolutePath(),"log(HISTOCORE*_*_*.log)");
     if(file.isEmpty())
     {
-        return 1;
+        return 0;
     }
 
     openEventLog(file);
